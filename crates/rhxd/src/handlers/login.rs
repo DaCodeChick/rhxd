@@ -66,6 +66,11 @@ pub async fn handle_login(
     if is_guest {
         tracing::info!("User {} logged in as guest", user_id);
         
+        // Update session to authenticated
+        if let Some(mut session) = state.get_session_mut(user_id) {
+            session.authenticate_guest(format!("Guest {}", user_id), 0);
+        }
+        
         // Create reply
         let mut reply_fields = vec![
             Field::integer(FieldId::Version, SERVER_VERSION as i32),

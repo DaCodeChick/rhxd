@@ -19,6 +19,8 @@ pub enum BroadcastMessage {
     ServerShutdown,
     /// Server message/announcement
     ServerMessage { message: String },
+    /// Chat message to broadcast to all users
+    ChatMessage { sender_id: u16, message: Vec<u8> },
 }
 
 /// Shared server state accessible by all connection handlers

@@ -48,6 +48,9 @@ pub async fn handle_connection(
     // Create framed codec for transaction handling
     let mut framed = Framed::new(stream, TransactionCodec::new());
     
+    // Subscribe to broadcast messages
+    let mut broadcast_rx = state.broadcast_tx.subscribe();
+    
     // Main transaction loop
     use futures::StreamExt;
     use futures::SinkExt;
@@ -102,8 +105,63 @@ pub async fn handle_connection(
                 }
             }
             
-            // TODO: Handle broadcast messages
             // TODO: Handle timeouts/keepalive
+            
+            // Handle broadcast messages
+            msg = broadcast_rx.recv() => {
+                match msg {
+                    Ok(broadcast) => {
+                        // Convert broadcast to transaction if needed
+                        let transaction = match broadcast {
+                            BroadcastMessage::ChatMessage { sender_id, message } => {
+                                // Get sender nickname
+                                let sender_nickname = state.get_session(sender_id)
+                                    .map(|s| s.nickname.clone())
+                                    .unwrap_or_else(|| format!("User {}", sender_id));
+                                
+                                Some(Transaction {
+                                    flags: 0,
+                                    is_reply: false,
+                                    transaction_type: TransactionType::ChatMessage,
+                                    id: 0, // Server-initiated transaction
+                                    error_code: 0,
+                                    total_size: 0,
+                                    data_size: 0,
+                                    fields: vec![
+                                        rhxcore::protocol::Field::binary(rhxcore::protocol::FieldId::Data, message),
+                                        rhxcore::protocol::Field::integer(rhxcore::protocol::FieldId::UserId, sender_id as i32),
+                                        rhxcore::protocol::Field::string(rhxcore::protocol::FieldId::UserName, sender_nickname),
+                                    ],
+                                })
+                            }
+                            BroadcastMessage::ServerShutdown => {
+                                tracing::info!("User {} notified of server shutdown", user_id);
+                                break;
+                            }
+                            _ => {
+                                // Other broadcast types not yet implemented
+                                tracing::debug!("Received unhandled broadcast: {:?}", broadcast);
+                                None
+                            }
+                        };
+                        
+                        // Send transaction if we created one
+                        if let Some(tx) = transaction {
+                            if let Err(e) = framed.send(tx).await {
+                                tracing::error!("Failed to send broadcast to user {}: {}", user_id, e);
+                                break;
+                            }
+                        }
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                        tracing::warn!("User {} lagged behind, skipped {} broadcasts", user_id, skipped);
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        tracing::info!("Broadcast channel closed for user {}", user_id);
+                        break;
+                    }
+                }
+            }
         }
     }
     
@@ -219,8 +277,8 @@ async fn handle_transaction(
         }
         
         TransactionType::SendChat => {
-            tracing::info!("User {} sent chat message (not yet implemented)", user_id);
-            Ok(None)
+            let result = handlers::chat::handle_send_chat(transaction, user_id, state).await?;
+            Ok(result)
         }
         
         TransactionType::GetUserNameList => {
