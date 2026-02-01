@@ -3,7 +3,7 @@
 use crate::state::{BroadcastMessage, ServerState};
 use anyhow::Result;
 use rhxcore::protocol::{ErrorCode, FieldId, Transaction, TransactionType};
-use rhxcore::types::UserFlags;
+use rhxcore::types::{UserFlags, UserOptions};
 use std::sync::Arc;
 
 /// Handle Agreed transaction (121)
@@ -35,7 +35,7 @@ pub async fn handle_agreed(
     // Extract fields
     let mut nickname: Option<String> = None;
     let mut icon_id: Option<i32> = None;
-    let mut options: Option<i32> = None;
+    let mut user_options = UserOptions::default();
     
     for field in &transaction.fields {
         match field.id {
@@ -46,7 +46,9 @@ pub async fn handle_agreed(
                 icon_id = field.as_integer();
             }
             FieldId::Options => {
-                options = field.as_integer();
+                if let Some(value) = field.as_integer() {
+                    user_options = UserOptions::from_i16(value as i16);
+                }
             }
             _ => {}
         }
@@ -59,7 +61,9 @@ pub async fn handle_agreed(
         _ => format!("Guest {}", user_id),
     };
     let mut icon_id = icon_id.unwrap_or(0) as u16;
-    let mut flags = options.unwrap_or(0) as u16;
+    
+    // Start with user options flags
+    let mut flags = user_options.to_user_flags();
     
     // Determine access privileges
     let access_privileges = {
@@ -92,11 +96,12 @@ pub async fn handle_agreed(
     }
     
     tracing::info!(
-        "User {} agreed with nickname='{}', icon={}, flags=0x{:04X}, is_admin={}, access=0x{:016X}",
+        "User {} agreed with nickname='{}', icon={}, flags=0x{:04X}, options=0x{:04X}, is_admin={}, access=0x{:016X}",
         user_id,
         nickname,
         icon_id,
         flags,
+        user_options.bits(),
         is_admin,
         access_privileges.bits()
     );
@@ -106,6 +111,7 @@ pub async fn handle_agreed(
         session.nickname = nickname.clone();
         session.icon_id = icon_id;
         session.flags = flags;
+        session.options = user_options;
     }
     
     // Broadcast NotifyChangeUser to all users

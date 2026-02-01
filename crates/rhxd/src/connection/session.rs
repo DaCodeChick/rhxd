@@ -1,5 +1,6 @@
 //! Session management
 
+use rhxcore::types::UserOptions;
 use std::net::SocketAddr;
 use std::time::SystemTime;
 
@@ -32,6 +33,9 @@ pub struct Session {
     /// User flags (idle, admin, etc.)
     pub flags: u16,
 
+    /// User options (refuse private messages, refuse private chat, automatic response)
+    pub options: UserOptions,
+
     /// Client IP address
     pub address: SocketAddr,
 
@@ -55,6 +59,7 @@ impl Session {
             nickname: format!("Guest {}", user_id),
             icon_id: 0,
             flags: 0,
+            options: UserOptions::default(),
             address,
             connected_at: now,
             last_activity: now,
