@@ -1,0 +1,32 @@
+{
+  "server": {
+    "name": "rhxd Test Server",
+    "description": "A modern Rust Hotline server",
+    "address": "0.0.0.0",
+    "port": 5500,
+    "max_connections": 100
+  },
+  "files": {
+    "root_path": "./files",
+    "max_download_size": 104857600,
+    "enable_uploads": true,
+    "enable_downloads": true
+  },
+  "database": {
+    "path": "./rhxd.db"
+  },
+  "logging": {
+    "level": "info",
+    "file": "./logs/rhxd.log"
+  },
+  "security": {
+    "require_login": false,
+    "allow_guest": true,
+    "ban_list_path": "./banlist.txt"
+  },
+  "features": {
+    "enable_news": false,
+    "enable_private_chat": true,
+    "enable_file_transfers": false
+  }
+}
