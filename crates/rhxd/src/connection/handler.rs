@@ -190,7 +190,7 @@ pub async fn handle_connection(
                                 // Normal (chat_options=0): "\r%13.13s:  %s" (13-char right-aligned username, 2 spaces after colon)
                                 // Emote (chat_options=1): "\r *** %s %s" (action format)
                                 let message_text = String::from_utf8_lossy(&message);
-                                let formatted_message = if chat_options == 1 {
+                                let formatted_message = if chat_options.is_emote() {
                                     // Emote format: "\r *** username message"
                                     format!("\r *** {} {}", sender_nickname, message_text)
                                 } else {
