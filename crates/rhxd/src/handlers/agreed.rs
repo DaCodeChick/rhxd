@@ -52,7 +52,11 @@ pub async fn handle_agreed(
     }
     
     // Use default values if not provided
-    let nickname = nickname.unwrap_or_else(|| format!("User {}", user_id));
+    // Handle empty nickname strings
+    let nickname = match nickname {
+        Some(n) if !n.trim().is_empty() => n,
+        _ => format!("Guest {}", user_id),
+    };
     let icon_id = icon_id.unwrap_or(0) as u16;
     let flags = options.unwrap_or(0) as u16;
     
@@ -71,13 +75,38 @@ pub async fn handle_agreed(
         session.flags = flags;
     }
     
+    // Determine access privileges
+    let access_privileges = {
+        if let Some(session) = state.get_session(user_id) {
+            if let Some(account_id) = session.account_id {
+                // For authenticated users, fetch from database
+                match crate::db::accounts::get_account_by_id(state.database.pool(), account_id).await {
+                    Ok(Some(account)) => account.access_privileges(),
+                    _ => rhxcore::types::AccessPrivileges::guest(),
+                }
+            } else {
+                // Guest user
+                rhxcore::types::AccessPrivileges::guest()
+            }
+        } else {
+            // Session not found, use guest as fallback
+            rhxcore::types::AccessPrivileges::guest()
+        }
+    };
+    
+    tracing::info!(
+        "User {} agreed - access: 0x{:016X}",
+        user_id,
+        access_privileges.bits()
+    );
+    
     // Broadcast NotifyChangeUser to all users
     state.broadcast(BroadcastMessage::UserJoined {
         user_id,
         nickname: nickname.clone(),
     });
     
-    // Send acknowledgment reply
+    // Send acknowledgment reply (no fields needed)
     Ok(Some(Transaction {
         flags: 0,
         is_reply: true,

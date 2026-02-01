@@ -74,15 +74,97 @@ pub async fn handle_connection(
                             transaction.fields.len()
                         );
                         
+                        // Store transaction type for post-processing
+                        let transaction_type = transaction.transaction_type;
+                        
                         // Dispatch to appropriate handler
                         let reply = handle_transaction(transaction, user_id, state.clone()).await;
                         
                         match reply {
                             Ok(Some(reply_transaction)) => {
+                                // Check if this was a successful login
+                                let was_successful_login = transaction_type == TransactionType::Login 
+                                    && reply_transaction.error_code == 0;
+                                
+                                // Check if this was a successful agreed
+                                let was_successful_agreed = transaction_type == TransactionType::Agreed
+                                    && reply_transaction.error_code == 0;
+                                
                                 // Send reply
                                 if let Err(e) = framed.send(reply_transaction).await {
                                     tracing::error!("Failed to send reply to user {}: {}", user_id, e);
                                     break;
+                                }
+                                
+                                // After successful login, send ShowAgreement transaction
+                                if was_successful_login {
+                                    tracing::debug!("Sending ShowAgreement to user {}", user_id);
+                                    
+                                    let show_agreement = Transaction {
+                                        flags: 0,
+                                        is_reply: false,
+                                        transaction_type: TransactionType::ShowAgreement,
+                                        id: 0, // Server-initiated transaction
+                                        error_code: 0,
+                                        total_size: 0,
+                                        data_size: 0,
+                                        fields: vec![
+                                            rhxcore::protocol::Field::string(rhxcore::protocol::FieldId::Data, ""),
+                                        ],
+                                    };
+                                    
+                                    if let Err(e) = framed.send(show_agreement).await {
+                                        tracing::error!("Failed to send ShowAgreement to user {}: {}", user_id, e);
+                                        break;
+                                    }
+                                }
+                                
+                                // After successful agreed, send UserAccess transaction (354)
+                                if was_successful_agreed {
+                                    // Get user's access privileges
+                                    let access_privileges = {
+                                        if let Some(session) = state.get_session(user_id) {
+                                            if let Some(account_id) = session.account_id {
+                                                // Authenticated user - fetch from database
+                                                match crate::db::accounts::get_account_by_id(state.database.pool(), account_id).await {
+                                                    Ok(Some(account)) => account.access_privileges(),
+                                                    _ => rhxcore::types::AccessPrivileges::guest(),
+                                                }
+                                            } else {
+                                                // Guest user
+                                                rhxcore::types::AccessPrivileges::guest()
+                                            }
+                                        } else {
+                                            rhxcore::types::AccessPrivileges::guest()
+                                        }
+                                    };
+                                    
+                                    tracing::info!(
+                                        "Sending UserAccess transaction (354) to user {} with access: 0x{:016X}",
+                                        user_id,
+                                        access_privileges.bits()
+                                    );
+                                    
+                                    let user_access_txn = Transaction {
+                                        flags: 0,
+                                        is_reply: false,
+                                        transaction_type: TransactionType::UserAccess,
+                                        id: 0, // Server-initiated transaction
+                                        error_code: 0,
+                                        total_size: 0,
+                                        data_size: 0,
+                                        fields: vec![
+                                            rhxcore::protocol::Field::binary(
+                                                rhxcore::protocol::FieldId::UserAccess,
+                                                access_privileges.to_wire_format().to_vec()
+                                            ),
+                                        ],
+                                    };
+                                    
+                                    if let Err(e) = framed.send(user_access_txn).await {
+                                        tracing::error!("Failed to send UserAccess to user {}: {}", user_id, e);
+                                        break;
+                                    }
                                 }
                             }
                             Ok(None) => {
@@ -135,32 +217,37 @@ pub async fn handle_connection(
                                 })
                             }
                             BroadcastMessage::UserJoined { user_id: joined_user_id, nickname } => {
-                                // Get user info from session
-                                let (icon_id, flags) = state.get_session(joined_user_id)
-                                    .map(|s| (s.icon_id, s.flags))
-                                    .unwrap_or((0, 0));
-                                
-                                // Build UserNameWithInfo field (Field 300)
-                                // Format: user_id (2 bytes) + icon_id (2 bytes) + flags (2 bytes) + name_len (2 bytes) + name
-                                let mut user_info = Vec::new();
-                                user_info.extend_from_slice(&joined_user_id.to_be_bytes());
-                                user_info.extend_from_slice(&icon_id.to_be_bytes());
-                                user_info.extend_from_slice(&flags.to_be_bytes());
-                                user_info.extend_from_slice(&(nickname.len() as u16).to_be_bytes());
-                                user_info.extend_from_slice(nickname.as_bytes());
-                                
-                                Some(Transaction {
-                                    flags: 0,
-                                    is_reply: false,
-                                    transaction_type: TransactionType::NotifyChangeUser,
-                                    id: 0, // Server-initiated transaction
-                                    error_code: 0,
-                                    total_size: 0,
-                                    data_size: 0,
-                                    fields: vec![
-                                        rhxcore::protocol::Field::binary(rhxcore::protocol::FieldId::UserNameWithInfo, user_info),
-                                    ],
-                                })
+                                // Don't send the notification to the user who just joined
+                                if joined_user_id == user_id {
+                                    None
+                                } else {
+                                    // Get user info from session
+                                    let (icon_id, flags) = state.get_session(joined_user_id)
+                                        .map(|s| (s.icon_id, s.flags))
+                                        .unwrap_or((0, 0));
+                                    
+                                    // Build UserNameWithInfo field (Field 300)
+                                    // Format: user_id (2 bytes) + icon_id (2 bytes) + flags (2 bytes) + name_len (2 bytes) + name
+                                    let mut user_info = Vec::new();
+                                    user_info.extend_from_slice(&joined_user_id.to_be_bytes());
+                                    user_info.extend_from_slice(&icon_id.to_be_bytes());
+                                    user_info.extend_from_slice(&flags.to_be_bytes());
+                                    user_info.extend_from_slice(&(nickname.len() as u16).to_be_bytes());
+                                    user_info.extend_from_slice(nickname.as_bytes());
+                                    
+                                    Some(Transaction {
+                                        flags: 0,
+                                        is_reply: false,
+                                        transaction_type: TransactionType::NotifyChangeUser,
+                                        id: 0, // Server-initiated transaction
+                                        error_code: 0,
+                                        total_size: 0,
+                                        data_size: 0,
+                                        fields: vec![
+                                            rhxcore::protocol::Field::binary(rhxcore::protocol::FieldId::UserNameWithInfo, user_info),
+                                        ],
+                                    })
+                                }
                             }
                             BroadcastMessage::UserLeft { user_id: left_user_id } => {
                                 Some(Transaction {

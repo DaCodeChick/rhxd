@@ -66,14 +66,36 @@ pub async fn handle_login(
     if is_guest {
         tracing::info!("User {} logged in as guest", user_id);
         
+        // Get guest access privileges
+        let guest_access = rhxcore::types::AccessPrivileges::guest();
+        
+        tracing::info!(
+            "User {} guest access: 0x{:016X} (READ_CHAT={}, SEND_CHAT={})",
+            user_id,
+            guest_access.bits(),
+            guest_access.contains(rhxcore::types::AccessPrivileges::READ_CHAT),
+            guest_access.contains(rhxcore::types::AccessPrivileges::SEND_CHAT)
+        );
+        
         // Update session to authenticated
         if let Some(mut session) = state.get_session_mut(user_id) {
             session.authenticate_guest(format!("Guest {}", user_id), 0);
         }
         
+        // Encode access as 8 bytes (Int64 in protocol spec)
+        // Use to_wire_format() to handle bit reversal on little-endian systems
+        let access_bytes = guest_access.to_wire_format().to_vec();
+        
+        tracing::debug!(
+            "Sending UserAccess field (8 bytes): {:02X?}",
+            access_bytes
+        );
+        
         // Create reply
         let mut reply_fields = vec![
             Field::integer(FieldId::Version, SERVER_VERSION as i32),
+            Field::integer(FieldId::UserId, user_id as i32),  // Client needs to know their user ID
+            Field::binary(FieldId::UserAccess, access_bytes),
         ];
         
         // Add server name and banner for version >= 151
@@ -130,9 +152,21 @@ pub async fn handle_login(
                     session.authenticate_user(account.id, account.name.clone(), 0);
                 }
                 
+                // Get user access privileges from account
+                let user_access = account.access_privileges();
+                
+                tracing::info!(
+                    "User {} access: 0x{:016X}",
+                    user_id,
+                    user_access.bits()
+                );
+                
                 // Create reply
                 let mut reply_fields = vec![
                     Field::integer(FieldId::Version, SERVER_VERSION as i32),
+                    Field::integer(FieldId::UserId, user_id as i32),  // Client needs to know their user ID
+                    // UserAccess as 8 bytes (Int64) with proper bit reversal
+                    Field::binary(FieldId::UserAccess, user_access.to_wire_format().to_vec()),
                 ];
                 
                 // Add server name and banner

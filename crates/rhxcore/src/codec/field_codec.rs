@@ -48,12 +48,23 @@ pub fn decode_fields(buf: &mut BytesMut) -> Result<Vec<Field>> {
             | FieldId::Version
             | FieldId::ReferenceNumber
             | FieldId::WaitingCount => {
-                // Integer fields (2 or 4 bytes typically)
+                // Integer fields (2 or 4 bytes)
                 if header.size == 2 {
                     FieldData::Integer(field_data.get_i16() as i32)
                 } else if header.size == 4 {
                     FieldData::Integer(field_data.get_i32())
                 } else {
+                    FieldData::Binary(field_data.to_vec())
+                }
+            }
+
+            FieldId::UserAccess => {
+                // UserAccess is always 8 bytes and needs special bit-reversal handling
+                // Store as Binary so it can be decoded with AccessPrivileges::from_wire_format()
+                if header.size == 8 {
+                    FieldData::Binary(field_data.to_vec())
+                } else {
+                    // Fallback for incorrect sizes
                     FieldData::Binary(field_data.to_vec())
                 }
             }
