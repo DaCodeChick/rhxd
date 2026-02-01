@@ -8,8 +8,8 @@ CREATE TABLE IF NOT EXISTS accounts (
     name TEXT NOT NULL,
     icon_id INTEGER DEFAULT 0,
     access_privileges INTEGER NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    modified_at TEXT NOT NULL DEFAULT (datetime('now'))
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    modified_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
 );
 
 CREATE INDEX IF NOT EXISTS idx_accounts_login ON accounts(login);

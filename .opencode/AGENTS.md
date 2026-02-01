@@ -62,6 +62,34 @@ When you see "DICK" in a task or instruction, you are to rename **EVERY** unname
 
 ---
 
+## Development Workflow
+
+### Build Consistency
+- **Always use `--release` builds** for running the server
+- Debug builds are only for running tests with `cargo test`
+- Command: `cargo build --release`
+
+### Server Management
+- **Never auto-start the server** - always let the user start it manually
+- The user will tell you when they've started the server
+- If you need to kill the server, use: `pkill -9 rhxd`
+- The user controls when to start/stop/restart
+
+### Testing Protocol
+1. Make code changes
+2. Run `cargo test` to verify (debug mode is fine for tests)
+3. If tests pass, run `cargo build --release`
+4. Tell user: "Server rebuilt. You can restart it now to test the changes."
+5. Wait for user feedback
+
+### What NOT to do
+- Don't auto-start the server with timeout commands
+- Don't switch between debug and release randomly
+- Don't try to keep the server running in the background
+- Don't assume the server state
+
+---
+
 ## Notes
 
 These are project-specific conventions. Standard OpenCode functionality and commands still work as normal.

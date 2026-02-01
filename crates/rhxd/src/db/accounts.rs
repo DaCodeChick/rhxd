@@ -14,6 +14,7 @@ pub struct Account {
     pub login: String,
     pub password_hash: Vec<u8>,
     pub name: String,
+    pub icon_id: i64,
     pub access: i64,
     pub created_at: i64,
     pub modified_at: i64,
@@ -51,7 +52,7 @@ pub async fn create_account(
     let access_bits = access.bits() as i64;
     
     let result = sqlx::query(
-        "INSERT INTO accounts (login, password_hash, name, access, created_at, modified_at)
+        "INSERT INTO accounts (login, password, name, access_privileges, created_at, modified_at)
          VALUES (?, ?, ?, ?, ?, ?)"
     )
     .bind(login)
@@ -68,20 +69,21 @@ pub async fn create_account(
 
 /// Get account by login
 pub async fn get_account_by_login(pool: &SqlitePool, login: &str) -> Result<Option<Account>> {
-    let account = sqlx::query_as::<_, (i64, String, Vec<u8>, String, i64, i64, i64)>(
-        "SELECT id, login, password_hash, name, access, created_at, modified_at
+    let account = sqlx::query_as::<_, (i64, String, Vec<u8>, String, i64, i64, i64, i64)>(
+        "SELECT id, login, password, name, icon_id, access_privileges, created_at, modified_at
          FROM accounts WHERE login = ? COLLATE NOCASE"
     )
     .bind(login)
     .fetch_optional(pool)
     .await?;
     
-    Ok(account.map(|(id, login, password_hash, name, access, created_at, modified_at)| {
+    Ok(account.map(|(id, login, password_hash, name, icon_id, access, created_at, modified_at)| {
         Account {
             id,
             login,
             password_hash,
             name,
+            icon_id,
             access,
             created_at,
             modified_at,
@@ -91,20 +93,21 @@ pub async fn get_account_by_login(pool: &SqlitePool, login: &str) -> Result<Opti
 
 /// Get account by ID
 pub async fn get_account_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Account>> {
-    let account = sqlx::query_as::<_, (i64, String, Vec<u8>, String, i64, i64, i64)>(
-        "SELECT id, login, password_hash, name, access, created_at, modified_at
+    let account = sqlx::query_as::<_, (i64, String, Vec<u8>, String, i64, i64, i64, i64)>(
+        "SELECT id, login, password, name, icon_id, access_privileges, created_at, modified_at
          FROM accounts WHERE id = ?"
     )
     .bind(id)
     .fetch_optional(pool)
     .await?;
     
-    Ok(account.map(|(id, login, password_hash, name, access, created_at, modified_at)| {
+    Ok(account.map(|(id, login, password_hash, name, icon_id, access, created_at, modified_at)| {
         Account {
             id,
             login,
             password_hash,
             name,
+            icon_id,
             access,
             created_at,
             modified_at,
@@ -114,8 +117,8 @@ pub async fn get_account_by_id(pool: &SqlitePool, id: i64) -> Result<Option<Acco
 
 /// List all accounts
 pub async fn list_accounts(pool: &SqlitePool) -> Result<Vec<Account>> {
-    let accounts = sqlx::query_as::<_, (i64, String, Vec<u8>, String, i64, i64, i64)>(
-        "SELECT id, login, password_hash, name, access, created_at, modified_at
+    let accounts = sqlx::query_as::<_, (i64, String, Vec<u8>, String, i64, i64, i64, i64)>(
+        "SELECT id, login, password, name, icon_id, access_privileges, created_at, modified_at
          FROM accounts ORDER BY login"
     )
     .fetch_all(pool)
@@ -123,12 +126,13 @@ pub async fn list_accounts(pool: &SqlitePool) -> Result<Vec<Account>> {
     
     Ok(accounts
         .into_iter()
-        .map(|(id, login, password_hash, name, access, created_at, modified_at)| {
+        .map(|(id, login, password_hash, name, icon_id, access, created_at, modified_at)| {
             Account {
                 id,
                 login,
                 password_hash,
                 name,
+                icon_id,
                 access,
                 created_at,
                 modified_at,
@@ -146,7 +150,7 @@ pub async fn update_password(
     let now = Utc::now().timestamp();
     
     sqlx::query(
-        "UPDATE accounts SET password_hash = ?, modified_at = ? WHERE id = ?"
+        "UPDATE accounts SET password = ?, modified_at = ? WHERE id = ?"
     )
     .bind(new_password_hash)
     .bind(now)
@@ -167,7 +171,7 @@ pub async fn update_access(
     let access_bits = access.bits() as i64;
     
     sqlx::query(
-        "UPDATE accounts SET access = ?, modified_at = ? WHERE id = ?"
+        "UPDATE accounts SET access_privileges = ?, modified_at = ? WHERE id = ?"
     )
     .bind(access_bits)
     .bind(now)

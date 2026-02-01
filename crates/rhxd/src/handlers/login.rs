@@ -114,11 +114,8 @@ pub async fn handle_login(
     
     match account {
         Some(account) => {
-            // Verify password
-            let password_hash = hex::decode(&account.password_hash)
-                .context("Invalid password hash in database")?;
-            
-            if rhxcore::password::verify_password(&password_hash, &password_bytes) {
+            // Verify password - password_hash is already in binary form (scrambled)
+            if rhxcore::password::verify_password(&account.password_hash, &password_bytes) {
                 tracing::info!(
                     "User {} successfully authenticated as '{}' (account_id={})",
                     user_id,

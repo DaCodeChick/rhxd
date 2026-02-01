@@ -8,11 +8,12 @@
 CREATE TABLE IF NOT EXISTS accounts (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     login TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    password_hash BLOB NOT NULL,  -- Scrambled password (legacy XOR) or future Blake3
-    name TEXT NOT NULL,            -- Display name
-    access INTEGER NOT NULL,       -- Access privileges bitfield (i64)
-    created_at INTEGER NOT NULL,   -- Unix timestamp
-    modified_at INTEGER NOT NULL,  -- Unix timestamp
+    password BLOB NOT NULL,              -- Scrambled password (legacy XOR) or future Blake3
+    name TEXT NOT NULL,                  -- Display name
+    icon_id INTEGER DEFAULT 0,
+    access_privileges INTEGER NOT NULL,  -- Access privileges bitfield (i64)
+    created_at INTEGER NOT NULL,         -- Unix timestamp
+    modified_at INTEGER NOT NULL,        -- Unix timestamp
     
     CHECK(length(login) <= 31),
     CHECK(length(name) <= 31)
