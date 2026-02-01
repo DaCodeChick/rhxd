@@ -49,7 +49,10 @@ mod tests {
         let xored = xor_password(password);
         let double_xored = xor_password(&xored);
 
+        // XOR twice should return original
         assert_eq!(password, double_xored.as_slice());
+        // Single XOR should be different
+        assert_ne!(password, xored.as_slice());
     }
 
     #[test]
@@ -59,24 +62,5 @@ mod tests {
 
         assert!(verify_password(&scrambled, password));
         assert!(!verify_password(&scrambled, b"wrongpassword"));
-    }
-
-    #[test]
-    fn test_xor_inverse() {
-        let data = b"Hello, World!";
-        let xored_once = xor_password(data);
-
-        // XOR twice should give original
-        let xored_twice = xor_password(&xored_once);
-        assert_eq!(data, xored_twice.as_slice());
-    }
-
-    #[test]
-    fn test_xor_different_from_original() {
-        let data = b"test";
-        let xored = xor_password(data);
-
-        // Should be different after XOR
-        assert_ne!(data, xored.as_slice());
     }
 }
