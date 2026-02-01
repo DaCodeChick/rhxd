@@ -180,17 +180,17 @@ pub async fn handle_connection(
                     Ok(broadcast) => {
                         // Convert broadcast to transaction if needed
                         let transaction = match broadcast {
-                            BroadcastMessage::ChatMessage { sender_id, message, chat_options } => {
+                            BroadcastMessage::ChatMessage { sender_id, message, is_emote } => {
                                 // Get sender nickname
                                 let sender_nickname = state.get_session(sender_id)
                                     .map(|s| s.nickname.clone())
                                     .unwrap_or_else(|| format!("User {}", sender_id));
                                 
                                 // Format the chat message based on mhxd format:
-                                // Normal (chat_options=0): "\r%13.13s:  %s" (13-char right-aligned username, 2 spaces after colon)
-                                // Emote (chat_options=1): "\r *** %s %s" (action format)
+                                // Normal (is_emote=false): "\r%13.13s:  %s" (13-char right-aligned username, 2 spaces after colon)
+                                // Emote (is_emote=true): "\r *** %s %s" (action format)
                                 let message_text = String::from_utf8_lossy(&message);
-                                let formatted_message = if chat_options.is_emote {
+                                let formatted_message = if is_emote {
                                     // Emote format: "\r *** username message"
                                     format!("\r *** {} {}", sender_nickname, message_text)
                                 } else {

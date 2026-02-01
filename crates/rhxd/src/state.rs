@@ -5,7 +5,6 @@ use crate::db::Database;
 use crate::Config;
 use anyhow::Result;
 use dashmap::DashMap;
-use rhxcore::types::ChatOptions;
 use std::sync::atomic::{AtomicU16, Ordering};
 use tokio::sync::broadcast;
 
@@ -21,7 +20,8 @@ pub enum BroadcastMessage {
     /// Server message/announcement
     ServerMessage { message: String },
     /// Chat message to broadcast to all users
-    ChatMessage { sender_id: u16, message: Vec<u8>, chat_options: ChatOptions },
+    /// Field 109: is_emote (false=normal chat, true=emote/action)
+    ChatMessage { sender_id: u16, message: Vec<u8>, is_emote: bool },
 }
 
 /// Shared server state accessible by all connection handlers

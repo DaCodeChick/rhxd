@@ -3,7 +3,6 @@
 use crate::state::{BroadcastMessage, ServerState};
 use anyhow::{Context, Result};
 use rhxcore::protocol::{FieldId, Transaction};
-use rhxcore::types::ChatOptions;
 use std::sync::Arc;
 
 /// Handle SendChat transaction (105)
@@ -34,9 +33,9 @@ pub async fn handle_send_chat(
         (session.user_id, session.nickname.clone())
     };
     
-    // Extract message data and chat options
+    // Extract message data and chat options (is_emote)
     let mut message_data: Option<Vec<u8>> = None;
-    let mut chat_options = ChatOptions::NORMAL;
+    let mut is_emote = false;
     
     for field in &transaction.fields {
         match field.id {
@@ -45,7 +44,7 @@ pub async fn handle_send_chat(
             }
             FieldId::ChatOptions => {
                 if let Some(value) = field.as_integer() {
-                    chat_options = ChatOptions::from_i16(value as i16);
+                    is_emote = value == 1;
                 }
             }
             _ => {}
@@ -57,7 +56,7 @@ pub async fn handle_send_chat(
     // Convert to string for logging
     let message_text = String::from_utf8_lossy(&message_data);
     
-    let chat_type = if chat_options.is_emote {
+    let chat_type = if is_emote {
         "emote"
     } else {
         "normal"
@@ -75,7 +74,7 @@ pub async fn handle_send_chat(
     state.broadcast(BroadcastMessage::ChatMessage {
         sender_id: sender_info.0,
         message: message_data,
-        chat_options,
+        is_emote,
     });
     
     // No direct reply to sender (broadcast is the response)
