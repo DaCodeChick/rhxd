@@ -9,7 +9,7 @@
 use crate::connection::transaction_helpers::{create_error_reply, create_success_reply};
 use crate::state::ServerState;
 use anyhow::{Context, Result};
-use rhxcore::password::{scramble_password, unscramble_password};
+use rhxcore::password::xor_password;
 use rhxcore::protocol::{ErrorCode, Field, FieldId, Transaction};
 use rhxcore::types::AccessPrivileges;
 use std::sync::Arc;
@@ -105,8 +105,8 @@ pub async fn handle_new_user(
     let access = access.unwrap_or(0);
     
     // Unscramble login and password
-    let login_bytes = unscramble_password(&login);
-    let password_bytes = unscramble_password(&password);
+    let login_bytes = xor_password(&login);
+    let password_bytes = xor_password(&password);
     
     let login_str = String::from_utf8(login_bytes)
         .context("Invalid UTF-8 in login")?;
@@ -189,7 +189,7 @@ pub async fn handle_get_user(
         .context("Missing login field")?;
     
     // Unscramble login
-    let login_bytes = unscramble_password(login);
+    let login_bytes = xor_password(login);
     let login_str = String::from_utf8(login_bytes)
         .context("Invalid UTF-8 in login")?;
     
@@ -211,7 +211,7 @@ pub async fn handle_get_user(
     tracing::info!("User {} retrieved account '{}'", user_id, account.login);
     
     // Scramble login for response (keep it scrambled as client expects)
-    let scrambled_login = rhxcore::password::scramble_password(account.login.as_bytes());
+    let scrambled_login = xor_password(account.login.as_bytes());
     
     // Encode access privileges as 8 bytes (big-endian for wire format)
     let access_bytes = (account.access as i64).to_be_bytes().to_vec();
@@ -281,7 +281,7 @@ pub async fn handle_set_user(
     
     // Login is required to identify the account
     let login = login.context("Missing login field")?;
-    let login_bytes = unscramble_password(&login);
+    let login_bytes = xor_password(&login);
     let login_str = String::from_utf8(login_bytes)
         .context("Invalid UTF-8 in login")?;
     
@@ -302,7 +302,7 @@ pub async fn handle_set_user(
     
     // Update password if provided
     if let Some(password_data) = password {
-        let password_bytes = unscramble_password(&password_data);
+        let password_bytes = xor_password(&password_data);
         
         crate::db::accounts::update_password(state.database.pool(), account.id, &password_bytes)
             .await
@@ -371,7 +371,7 @@ pub async fn handle_delete_user(
         .context("Missing login field")?;
     
     // Unscramble login
-    let login_bytes = unscramble_password(login);
+    let login_bytes = xor_password(login);
     let login_str = String::from_utf8(login_bytes)
         .context("Invalid UTF-8 in login")?;
     

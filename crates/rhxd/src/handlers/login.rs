@@ -3,8 +3,8 @@
 use crate::connection::transaction_helpers::{create_error_reply, create_success_reply};
 use crate::state::ServerState;
 use anyhow::{Context, Result};
-use rhxcore::password::unscramble_password;
-use rhxcore::protocol::{ErrorCode, Field, FieldId, Transaction, TransactionType, SERVER_VERSION};
+use rhxcore::password::xor_password;
+use rhxcore::protocol::{ErrorCode, Field, FieldId, Transaction, SERVER_VERSION};
 use std::sync::Arc;
 
 /// Handle login transaction (107)
@@ -102,8 +102,8 @@ pub async fn handle_login(
     let password = password.context("Missing password field")?;
     
     // Unscramble login and password
-    let login_str = String::from_utf8_lossy(&unscramble_password(&login)).to_string();
-    let password_bytes = unscramble_password(&password);
+    let login_str = String::from_utf8_lossy(&xor_password(&login)).to_string();
+    let password_bytes = xor_password(&password);
     
     tracing::debug!("User {} attempting login as '{}'", user_id, login_str);
     

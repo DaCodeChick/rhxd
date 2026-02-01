@@ -3,8 +3,8 @@
 use bytes::{BufMut, BytesMut};
 use rhxcore::codec::TransactionCodec;
 use rhxcore::protocol::{
-    ErrorCode, Field, FieldId, Handshake, HandshakeReply, Transaction, TransactionType,
-    PROTOCOL_MAGIC, SERVER_VERSION,
+    Field, FieldId, Handshake, HandshakeReply, Transaction, TransactionType,
+    PROTOCOL_MAGIC,
 };
 use rhxd::{Config, Server};
 use std::time::Duration;

@@ -1,5 +1,7 @@
 //! Database schema utilities
 
+#![allow(dead_code)]
+
 /// Current schema version
 pub const SCHEMA_VERSION: &str = "1";
 

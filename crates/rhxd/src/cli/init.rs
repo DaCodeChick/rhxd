@@ -38,7 +38,7 @@ pub async fn run(config_path: &str, _non_interactive: bool) -> Result<()> {
     
     // Create default admin account
     let admin_password = generate_password(16);
-    let scrambled_password = rhxcore::password::scramble_password(admin_password.as_bytes());
+    let scrambled_password = rhxcore::password::xor_password(admin_password.as_bytes());
     let access_bits = rhxcore::types::AccessPrivileges::admin().bits() as i64;
     
     // Use raw SQL to avoid sqlx macro issues during initial setup
