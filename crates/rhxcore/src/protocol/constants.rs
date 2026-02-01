@@ -7,7 +7,8 @@ pub const PROTOCOL_MAGIC: [u8; 4] = [b'T', b'R', b'T', b'P'];
 pub const PROTOCOL_VERSION: u16 = 1;
 
 /// Server version we report (Hotline 1.9.x compatible)
-pub const SERVER_VERSION: u16 = 151;
+/// Version 197 = Hotline 1.9.2
+pub const SERVER_VERSION: u16 = 197;
 
 /// HTXF protocol magic bytes: 'HTXF'
 pub const HTXF_MAGIC: [u8; 4] = [b'H', b'T', b'X', b'F'];

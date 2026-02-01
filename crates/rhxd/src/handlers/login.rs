@@ -77,13 +77,12 @@ pub async fn handle_login(
         ];
         
         // Add server name and banner for version >= 151
-        if client_version.unwrap_or(0) >= 151 {
-            reply_fields.push(Field::integer(FieldId::BannerId, 0));
-            reply_fields.push(Field::string(
-                FieldId::ServerName,
-                &state.config.server.name,
-            ));
-        }
+        // Note: We always send these for modern clients
+        reply_fields.push(Field::integer(FieldId::BannerId, 0));
+        reply_fields.push(Field::string(
+            FieldId::ServerName,
+            &state.config.server.name,
+        ));
         
         return Ok(Transaction {
             flags: 0,
@@ -136,14 +135,12 @@ pub async fn handle_login(
                     Field::integer(FieldId::Version, SERVER_VERSION as i32),
                 ];
                 
-                // Add server name and banner for version >= 151
-                if client_version.unwrap_or(0) >= 151 {
-                    reply_fields.push(Field::integer(FieldId::BannerId, 0));
-                    reply_fields.push(Field::string(
-                        FieldId::ServerName,
-                        &state.config.server.name,
-                    ));
-                }
+                // Add server name and banner
+                reply_fields.push(Field::integer(FieldId::BannerId, 0));
+                reply_fields.push(Field::string(
+                    FieldId::ServerName,
+                    &state.config.server.name,
+                ));
                 
                 Ok(Transaction {
                     flags: 0,
