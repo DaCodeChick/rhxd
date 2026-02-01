@@ -57,7 +57,7 @@ pub async fn handle_send_chat(
     // Convert to string for logging
     let message_text = String::from_utf8_lossy(&message_data);
     
-    let chat_type = if chat_options.is_emote() {
+    let chat_type = if chat_options.is_emote {
         "emote"
     } else {
         "normal"

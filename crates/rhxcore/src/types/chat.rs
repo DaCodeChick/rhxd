@@ -18,41 +18,37 @@ impl ChatRoom {
     }
 }
 
-bitflags::bitflags! {
-    /// Chat message options
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub struct ChatOptions: u16 {
-        /// Normal chat message (default)
-        const NORMAL = 0;
-        /// Emote/action message (e.g., "/me does something")
-        const EMOTE = 1 << 0;
-    }
-}
-
-impl Default for ChatOptions {
-    fn default() -> Self {
-        Self::NORMAL
-    }
+/// Chat message type
+///
+/// Field 109 in the Hotline protocol indicates the chat message type:
+/// - false (0): Normal chat message
+/// - true (1): Emote/action message (e.g., "/me does something")
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ChatOptions {
+    /// True if this is an emote message, false for normal chat
+    pub is_emote: bool,
 }
 
 impl ChatOptions {
-    /// Check if this is an emote message
-    pub fn is_emote(&self) -> bool {
-        self.contains(Self::EMOTE)
-    }
+    /// Normal chat message (field 109 = 0)
+    pub const NORMAL: Self = Self { is_emote: false };
 
-    /// Check if this is a normal message
-    pub fn is_normal(&self) -> bool {
-        !self.is_emote()
-    }
+    /// Emote/action message (field 109 = 1)
+    pub const EMOTE: Self = Self { is_emote: true };
 
-    /// Create from i16 value (for protocol compatibility)
+    /// Create from protocol field value
     pub fn from_i16(value: i16) -> Self {
-        Self::from_bits_truncate(value as u16)
+        Self {
+            is_emote: value == 1,
+        }
     }
 
-    /// Convert to i16 value (for protocol compatibility)
+    /// Convert to protocol field value
     pub fn to_i16(&self) -> i16 {
-        self.bits() as i16
+        if self.is_emote {
+            1
+        } else {
+            0
+        }
     }
 }
