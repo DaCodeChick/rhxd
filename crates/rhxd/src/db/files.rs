@@ -225,8 +225,6 @@ pub async fn index_directory(
     physical_root: &str,
     virtual_root: &str,
 ) -> Result<usize> {
-    use std::fs;
-    
     let mut count = 0;
     let physical_path = PathBuf::from(physical_root);
     

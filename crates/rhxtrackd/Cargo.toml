@@ -24,15 +24,15 @@ bytes = { workspace = true }
 chrono = { workspace = true }
 
 # CLI
-clap = { version = "4", features = ["derive"] }
+clap = { version = "4.5.56", features = ["derive"] }
 
 # HTTP server
-axum = "0.7"
-tower = "0.4"
-tower-http = { version = "0.5", features = ["trace"] }
+axum = "0.8.8"
+tower = "0.5.3"
+tower-http = { version = "0.6.8", features = ["trace"] }
 
 # Database
-sqlx = { version = "0.7", features = ["runtime-tokio", "sqlite"] }
+sqlx = { version = "0.8.6", features = ["runtime-tokio", "sqlite"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["test-util"] }
