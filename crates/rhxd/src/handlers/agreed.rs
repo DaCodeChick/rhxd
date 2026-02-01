@@ -3,6 +3,7 @@
 use crate::state::{BroadcastMessage, ServerState};
 use anyhow::Result;
 use rhxcore::protocol::{ErrorCode, FieldId, Transaction, TransactionType};
+use rhxcore::types::UserFlags;
 use std::sync::Arc;
 
 /// Handle Agreed transaction (121)
@@ -57,23 +58,8 @@ pub async fn handle_agreed(
         Some(n) if !n.trim().is_empty() => n,
         _ => format!("Guest {}", user_id),
     };
-    let icon_id = icon_id.unwrap_or(0) as u16;
-    let flags = options.unwrap_or(0) as u16;
-    
-    tracing::info!(
-        "User {} agreed with nickname='{}', icon={}, flags={}",
-        user_id,
-        nickname,
-        icon_id,
-        flags
-    );
-    
-    // Update session with user-provided info
-    if let Some(mut session) = state.get_session_mut(user_id) {
-        session.nickname = nickname.clone();
-        session.icon_id = icon_id;
-        session.flags = flags;
-    }
+    let mut icon_id = icon_id.unwrap_or(0) as u16;
+    let mut flags = options.unwrap_or(0) as u16;
     
     // Determine access privileges
     let access_privileges = {
@@ -94,11 +80,33 @@ pub async fn handle_agreed(
         }
     };
     
+    // Set admin flag and icon if user has administrative privileges
+    let is_admin = access_privileges.contains(rhxcore::types::AccessPrivileges::DISCONNECT_USERS);
+    if is_admin {
+        flags |= UserFlags::ADMIN.bits();
+        
+        // If client didn't specify an icon, use the default admin icon (410)
+        if icon_id == 0 {
+            icon_id = 410;
+        }
+    }
+    
     tracing::info!(
-        "User {} agreed - access: 0x{:016X}",
+        "User {} agreed with nickname='{}', icon={}, flags=0x{:04X}, is_admin={}, access=0x{:016X}",
         user_id,
+        nickname,
+        icon_id,
+        flags,
+        is_admin,
         access_privileges.bits()
     );
+    
+    // Update session with user-provided info and computed flags
+    if let Some(mut session) = state.get_session_mut(user_id) {
+        session.nickname = nickname.clone();
+        session.icon_id = icon_id;
+        session.flags = flags;
+    }
     
     // Broadcast NotifyChangeUser to all users
     state.broadcast(BroadcastMessage::UserJoined {

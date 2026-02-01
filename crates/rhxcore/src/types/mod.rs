@@ -1,11 +1,11 @@
 //! Type definitions
 
-pub mod user;
-pub mod file;
 pub mod access;
 pub mod chat;
+pub mod file;
+pub mod user;
 
-pub use user::User;
-pub use file::FileEntry;
 pub use access::AccessPrivileges;
 pub use chat::ChatRoom;
+pub use file::FileEntry;
+pub use user::{User, UserFlags};
