@@ -1,5 +1,7 @@
 # rhxd Server - Ready for Testing! 🎉
 
+**UPDATED:** Fixed agreement hang and server version issues!
+
 The rhxd Hotline server is now ready to test with your Hotline client!
 
 ## Quick Start
