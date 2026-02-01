@@ -201,6 +201,13 @@ pub async fn handle_connection(
                                     .map(|s| s.nickname.clone())
                                     .unwrap_or_else(|| format!("User {}", sender_id));
                                 
+                                // Format the chat message properly: "username: message\r"
+                                // The \r is important for Hotline clients to display correctly
+                                let formatted_message = format!("{}: ", sender_nickname);
+                                let mut formatted_data = formatted_message.into_bytes();
+                                formatted_data.extend_from_slice(&message);
+                                formatted_data.push(b'\r'); // Add carriage return at the end
+                                
                                 Some(Transaction {
                                     flags: 0,
                                     is_reply: false,
@@ -210,7 +217,7 @@ pub async fn handle_connection(
                                     total_size: 0,
                                     data_size: 0,
                                     fields: vec![
-                                        rhxcore::protocol::Field::binary(rhxcore::protocol::FieldId::Data, message),
+                                        rhxcore::protocol::Field::binary(rhxcore::protocol::FieldId::Data, formatted_data),
                                         rhxcore::protocol::Field::integer(rhxcore::protocol::FieldId::UserId, sender_id as i32),
                                         rhxcore::protocol::Field::string(rhxcore::protocol::FieldId::UserName, sender_nickname),
                                     ],
