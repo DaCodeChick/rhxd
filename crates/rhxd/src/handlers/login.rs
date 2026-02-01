@@ -1,5 +1,6 @@
 //! Login transaction handler
 
+use crate::connection::transaction_helpers::{create_error_reply, create_success_reply};
 use crate::state::ServerState;
 use anyhow::{Context, Result};
 use rhxcore::password::unscramble_password;
@@ -27,7 +28,6 @@ pub async fn handle_login(
     // Extract fields
     let mut login: Option<Vec<u8>> = None;
     let mut password: Option<Vec<u8>> = None;
-    let mut client_version: Option<i32> = None;
     
     for field in &transaction.fields {
         match field.id {
@@ -36,9 +36,6 @@ pub async fn handle_login(
             }
             FieldId::UserPassword => {
                 password = field.as_binary().map(|b| b.to_vec());
-            }
-            FieldId::Version => {
-                client_version = field.as_integer();
             }
             _ => {}
         }
@@ -50,16 +47,7 @@ pub async fn handle_login(
     
     if is_guest && !state.config.security.allow_guest {
         tracing::warn!("User {} attempted guest login but guests not allowed", user_id);
-        return Ok(Transaction {
-            flags: 0,
-            is_reply: true,
-            transaction_type: TransactionType::Login,
-            id: transaction.id,
-            error_code: ErrorCode::PermissionDenied.to_u32(),
-            total_size: 0,
-            data_size: 0,
-            fields: vec![],
-        });
+        return Ok(create_error_reply(&transaction, ErrorCode::PermissionDenied));
     }
     
     // Handle guest login
@@ -106,16 +94,7 @@ pub async fn handle_login(
             &state.config.server.name,
         ));
         
-        return Ok(Transaction {
-            flags: 0,
-            is_reply: true,
-            transaction_type: TransactionType::Login,
-            id: transaction.id,
-            error_code: ErrorCode::NoError.to_u32(),
-            total_size: 0,
-            data_size: 0,
-            fields: reply_fields,
-        });
+        return Ok(create_success_reply(&transaction, reply_fields));
     }
     
     // Handle authenticated login
@@ -176,42 +155,15 @@ pub async fn handle_login(
                     &state.config.server.name,
                 ));
                 
-                Ok(Transaction {
-                    flags: 0,
-                    is_reply: true,
-                    transaction_type: TransactionType::Login,
-                    id: transaction.id,
-                    error_code: ErrorCode::NoError.to_u32(),
-                    total_size: 0,
-                    data_size: 0,
-                    fields: reply_fields,
-                })
+                Ok(create_success_reply(&transaction, reply_fields))
             } else {
                 tracing::warn!("User {} failed authentication - invalid password", user_id);
-                Ok(Transaction {
-                    flags: 0,
-                    is_reply: true,
-                    transaction_type: TransactionType::Login,
-                    id: transaction.id,
-                    error_code: ErrorCode::PermissionDenied.to_u32(),
-                    total_size: 0,
-                    data_size: 0,
-                    fields: vec![],
-                })
+                Ok(create_error_reply(&transaction, ErrorCode::PermissionDenied))
             }
         }
         None => {
             tracing::warn!("User {} failed authentication - account '{}' not found", user_id, login_str);
-            Ok(Transaction {
-                flags: 0,
-                is_reply: true,
-                transaction_type: TransactionType::Login,
-                id: transaction.id,
-                error_code: ErrorCode::PermissionDenied.to_u32(),
-                total_size: 0,
-                data_size: 0,
-                fields: vec![],
-            })
+            Ok(create_error_reply(&transaction, ErrorCode::PermissionDenied))
         }
     }
 }

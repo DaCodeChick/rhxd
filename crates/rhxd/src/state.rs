@@ -96,7 +96,7 @@ impl ServerState {
     }
     
     /// Get a session by user ID
-    pub fn get_session(&self, user_id: u16) -> Option<dashmap::mapref::one::Ref<u16, Session>> {
+    pub fn get_session(&self, user_id: u16) -> Option<dashmap::mapref::one::Ref<'_, u16, Session>> {
         self.sessions.get(&user_id)
     }
     

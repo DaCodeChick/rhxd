@@ -1,5 +1,6 @@
 //! Connection handler for individual clients
 
+use crate::connection::transaction_helpers::create_server_transaction;
 use crate::connection::Session;
 use crate::handlers;
 use crate::state::{BroadcastMessage, ServerState};
@@ -100,18 +101,10 @@ pub async fn handle_connection(
                                 if was_successful_login {
                                     tracing::debug!("Sending ShowAgreement to user {}", user_id);
                                     
-                                    let show_agreement = Transaction {
-                                        flags: 0,
-                                        is_reply: false,
-                                        transaction_type: TransactionType::ShowAgreement,
-                                        id: 0, // Server-initiated transaction
-                                        error_code: 0,
-                                        total_size: 0,
-                                        data_size: 0,
-                                        fields: vec![
-                                            rhxcore::protocol::Field::string(rhxcore::protocol::FieldId::Data, ""),
-                                        ],
-                                    };
+                                    let show_agreement = create_server_transaction(
+                                        TransactionType::ShowAgreement,
+                                        vec![rhxcore::protocol::Field::string(rhxcore::protocol::FieldId::Data, "")],
+                                    );
                                     
                                     if let Err(e) = framed.send(show_agreement).await {
                                         tracing::error!("Failed to send ShowAgreement to user {}: {}", user_id, e);
@@ -145,21 +138,13 @@ pub async fn handle_connection(
                                         access_privileges.bits()
                                     );
                                     
-                                    let user_access_txn = Transaction {
-                                        flags: 0,
-                                        is_reply: false,
-                                        transaction_type: TransactionType::UserAccess,
-                                        id: 0, // Server-initiated transaction
-                                        error_code: 0,
-                                        total_size: 0,
-                                        data_size: 0,
-                                        fields: vec![
-                                            rhxcore::protocol::Field::binary(
-                                                rhxcore::protocol::FieldId::UserAccess,
-                                                access_privileges.to_wire_format().to_vec()
-                                            ),
-                                        ],
-                                    };
+                                    let user_access_txn = create_server_transaction(
+                                        TransactionType::UserAccess,
+                                        vec![rhxcore::protocol::Field::binary(
+                                            rhxcore::protocol::FieldId::UserAccess,
+                                            access_privileges.to_wire_format().to_vec()
+                                        )],
+                                    );
                                     
                                     if let Err(e) = framed.send(user_access_txn).await {
                                         tracing::error!("Failed to send UserAccess to user {}: {}", user_id, e);
@@ -214,20 +199,14 @@ pub async fn handle_connection(
                                 };
                                 let formatted_data = formatted_message.into_bytes();
                                 
-                                Some(Transaction {
-                                    flags: 0,
-                                    is_reply: false,
-                                    transaction_type: TransactionType::ChatMessage,
-                                    id: 0, // Server-initiated transaction
-                                    error_code: 0,
-                                    total_size: 0,
-                                    data_size: 0,
-                                    fields: vec![
+                                Some(create_server_transaction(
+                                    TransactionType::ChatMessage,
+                                    vec![
                                         rhxcore::protocol::Field::binary(rhxcore::protocol::FieldId::Data, formatted_data),
                                         rhxcore::protocol::Field::integer(rhxcore::protocol::FieldId::UserId, sender_id as i32),
                                         rhxcore::protocol::Field::string(rhxcore::protocol::FieldId::UserName, sender_nickname),
                                     ],
-                                })
+                                ))
                             }
                             BroadcastMessage::UserJoined { user_id: joined_user_id, nickname } => {
                                 // Don't send the notification to the user who just joined
@@ -248,51 +227,37 @@ pub async fn handle_connection(
                                     user_info.extend_from_slice(&(nickname.len() as u16).to_be_bytes());
                                     user_info.extend_from_slice(nickname.as_bytes());
                                     
-                                    Some(Transaction {
-                                        flags: 0,
-                                        is_reply: false,
-                                        transaction_type: TransactionType::NotifyChangeUser,
-                                        id: 0, // Server-initiated transaction
-                                        error_code: 0,
-                                        total_size: 0,
-                                        data_size: 0,
-                                        fields: vec![
-                                            rhxcore::protocol::Field::binary(rhxcore::protocol::FieldId::UserNameWithInfo, user_info),
-                                        ],
-                                    })
+                                    Some(                                        create_server_transaction(
+                                            TransactionType::NotifyChangeUser,
+                                            vec![rhxcore::protocol::Field::binary(
+                                                rhxcore::protocol::FieldId::UserNameWithInfo,
+                                                user_info
+                                            )],
+                                        )
+                                    )
                                 }
                             }
                             BroadcastMessage::UserLeft { user_id: left_user_id } => {
-                                Some(Transaction {
-                                    flags: 0,
-                                    is_reply: false,
-                                    transaction_type: TransactionType::NotifyDeleteUser,
-                                    id: 0, // Server-initiated transaction
-                                    error_code: 0,
-                                    total_size: 0,
-                                    data_size: 0,
-                                    fields: vec![
-                                        rhxcore::protocol::Field::integer(rhxcore::protocol::FieldId::UserId, left_user_id as i32),
-                                    ],
-                                })
+                                Some(create_server_transaction(
+                                    TransactionType::NotifyDeleteUser,
+                                    vec![rhxcore::protocol::Field::integer(
+                                        rhxcore::protocol::FieldId::UserId,
+                                        left_user_id as i32
+                                    )],
+                                ))
                             }
                             BroadcastMessage::ServerShutdown => {
                                 tracing::info!("User {} notified of server shutdown", user_id);
                                 break;
                             }
                             BroadcastMessage::ServerMessage { message } => {
-                                Some(Transaction {
-                                    flags: 0,
-                                    is_reply: false,
-                                    transaction_type: TransactionType::ServerMessage,
-                                    id: 0, // Server-initiated transaction
-                                    error_code: 0,
-                                    total_size: 0,
-                                    data_size: 0,
-                                    fields: vec![
-                                        rhxcore::protocol::Field::string(rhxcore::protocol::FieldId::Data, message),
-                                    ],
-                                })
+                                Some(create_server_transaction(
+                                    TransactionType::ServerMessage,
+                                    vec![rhxcore::protocol::Field::string(
+                                        rhxcore::protocol::FieldId::Data,
+                                        message
+                                    )],
+                                ))
                             }
                         };
                         
@@ -373,11 +338,12 @@ async fn perform_handshake(stream: &mut TcpStream, user_id: u16) -> Result<()> {
     }
     
     // Validate protocol version (we support version 1)
-    if handshake.version != 1 {
+    if handshake.version != rhxcore::protocol::PROTOCOL_VERSION {
         tracing::warn!(
-            "User {} sent unsupported protocol version: {}",
+            "User {} sent unsupported protocol version: {} (expected {})",
             user_id,
-            handshake.version
+            handshake.version,
+            rhxcore::protocol::PROTOCOL_VERSION
         );
         
         // Send error reply
