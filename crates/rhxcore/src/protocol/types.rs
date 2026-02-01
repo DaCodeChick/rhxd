@@ -85,7 +85,7 @@ pub enum TransactionType {
 
 impl TransactionType {
     /// Convert from u16
-    pub fn from_u16(value: u16) -> Option<Self> {
+    pub const fn from_u16(value: u16) -> Option<Self> {
         match value {
             100 => Some(Self::Error),
             101 => Some(Self::GetMessages),
@@ -148,8 +148,16 @@ impl TransactionType {
     }
 
     /// Convert to u16
-    pub fn to_u16(self) -> u16 {
+    #[inline]
+    pub const fn to_u16(self) -> u16 {
         self as u16
+    }
+}
+
+impl From<TransactionType> for u16 {
+    #[inline]
+    fn from(value: TransactionType) -> Self {
+        value.to_u16()
     }
 }
 
@@ -167,7 +175,7 @@ pub enum ErrorCode {
 
 impl ErrorCode {
     /// Convert from u32
-    pub fn from_u32(value: u32) -> Self {
+    pub const fn from_u32(value: u32) -> Self {
         match value {
             0 => Self::NoError,
             2 => Self::PermissionDenied,
@@ -179,7 +187,15 @@ impl ErrorCode {
     }
 
     /// Convert to u32
-    pub fn to_u32(self) -> u32 {
+    #[inline]
+    pub const fn to_u32(self) -> u32 {
         self as u32
+    }
+}
+
+impl From<ErrorCode> for u32 {
+    #[inline]
+    fn from(value: ErrorCode) -> Self {
+        value.to_u32()
     }
 }

@@ -88,7 +88,7 @@ pub enum FieldId {
 
 impl FieldId {
     /// Convert from u16
-    pub fn from_u16(value: u16) -> Option<Self> {
+    pub const fn from_u16(value: u16) -> Option<Self> {
         match value {
             101 => Some(Self::Data),
             102 => Some(Self::UserName),
@@ -155,8 +155,16 @@ impl FieldId {
     }
 
     /// Convert to u16
-    pub fn to_u16(self) -> u16 {
+    #[inline]
+    pub const fn to_u16(self) -> u16 {
         self as u16
+    }
+}
+
+impl From<FieldId> for u16 {
+    #[inline]
+    fn from(value: FieldId) -> Self {
+        value.to_u16()
     }
 }
 
