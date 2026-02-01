@@ -492,6 +492,163 @@ async fn test_agreed_notification() {
     std::fs::remove_file(&db_path).ok();
 }
 
+#[tokio::test]
+async fn test_get_user_name_list() {
+    let _ = tracing_subscriber::fmt()
+        .with_test_writer()
+        .try_init();
+
+    let mut config = Config::default();
+    let test_port = 15508;
+    config.server.port = test_port;
+    config.security.allow_guest = true;
+    config.database.path = format!("/tmp/test_rhxd_userlist_{}.db", std::process::id()).into();
+    let db_path = config.database.path.clone();
+    
+    let server = Server::new(config).await.expect("Failed to create server");
+    
+    let server_handle = tokio::spawn(async move {
+        server.run().await
+    });
+    
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    
+    // Connect three clients
+    let addr = format!("127.0.0.1:{}", test_port);
+    
+    let mut client1 = connect_and_handshake(&addr).await.expect("Client 1 handshake failed");
+    let mut client2 = connect_and_handshake(&addr).await.expect("Client 2 handshake failed");
+    let mut client3 = connect_and_handshake(&addr).await.expect("Client 3 handshake failed");
+    
+    // Login all clients as guests
+    login_as_guest(&mut client1).await.expect("Client 1 login failed");
+    login_as_guest(&mut client2).await.expect("Client 2 login failed");
+    login_as_guest(&mut client3).await.expect("Client 3 login failed");
+    
+    println!("All 3 clients logged in");
+    
+    // Clients send Agreed to finalize login with custom nicknames
+    for (client, nickname) in [
+        (&mut client1, "Alice"),
+        (&mut client2, "Bob"),
+        (&mut client3, "Charlie"),
+    ] {
+        let agreed_tx = Transaction {
+            flags: 0,
+            is_reply: false,
+            transaction_type: TransactionType::Agreed,
+            id: 3,
+            error_code: 0,
+            total_size: 0,
+            data_size: 0,
+            fields: vec![
+                Field::string(FieldId::UserName, nickname),
+                Field::integer(FieldId::UserIconId, 0),
+                Field::integer(FieldId::Options, 0),
+            ],
+        };
+        
+        client.send(agreed_tx).await.expect("Failed to send agreed");
+        
+        // Consume Agreed reply
+        let _reply = timeout(Duration::from_secs(2), client.next())
+            .await
+            .expect("Timeout waiting for agreed reply")
+            .expect("No reply received")
+            .expect("Error receiving reply");
+        
+        // Consume NotifyChangeUser broadcasts (each client gets notified about the user who just joined)
+        // This is tricky - each existing client will receive a notification
+        // For simplicity, we'll just drain a few messages
+        for _ in 0..2 {
+            let _ = timeout(Duration::from_millis(100), client.next()).await;
+        }
+    }
+    
+    println!("All clients finalized with nicknames");
+    
+    // Drain any pending NotifyChangeUser messages for all clients
+    // Each client will have received broadcasts from other clients' Agreed transactions
+    for client in [&mut client1, &mut client2, &mut client3] {
+        loop {
+            match timeout(Duration::from_millis(50), client.next()).await {
+                Ok(Some(Ok(tx))) if tx.transaction_type == TransactionType::NotifyChangeUser => {
+                    // Keep draining
+                    continue;
+                }
+                _ => break, // Timeout or other message type
+            }
+        }
+    }
+    
+    println!("Drained pending broadcasts");
+    
+    // Client 1 requests user list
+    let user_list_tx = Transaction {
+        flags: 0,
+        is_reply: false,
+        transaction_type: TransactionType::GetUserNameList,
+        id: 10,
+        error_code: 0,
+        total_size: 0,
+        data_size: 0,
+        fields: vec![],
+    };
+    
+    client1.send(user_list_tx).await.expect("Failed to send GetUserNameList");
+    
+    println!("Client 1 requested user list");
+    
+    // Receive reply
+    let reply = timeout(Duration::from_secs(2), client1.next())
+        .await
+        .expect("Timeout waiting for user list reply")
+        .expect("No reply received")
+        .expect("Error receiving reply");
+    
+    assert_eq!(reply.transaction_type, TransactionType::GetUserNameList);
+    assert!(reply.is_reply);
+    assert_eq!(reply.error_code, 0);
+    
+    // Parse UserNameWithInfo fields
+    let user_infos: Vec<_> = reply.fields.iter()
+        .filter(|f| f.id == FieldId::UserNameWithInfo)
+        .filter_map(|f| f.as_binary())
+        .collect();
+    
+    assert_eq!(user_infos.len(), 3, "Expected 3 users in list");
+    
+    println!("Received {} users in list", user_infos.len());
+    
+    // Parse and verify each user
+    let mut nicknames = Vec::new();
+    for user_info in user_infos {
+        assert!(user_info.len() >= 8, "UserNameWithInfo too short");
+        
+        let user_id = u16::from_be_bytes([user_info[0], user_info[1]]);
+        let name_len = u16::from_be_bytes([user_info[6], user_info[7]]);
+        let nickname = String::from_utf8_lossy(&user_info[8..8 + name_len as usize]);
+        
+        println!("  User {}: {}", user_id, nickname);
+        nicknames.push(nickname.to_string());
+    }
+    
+    // Verify all expected nicknames are present
+    assert!(nicknames.contains(&"Alice".to_string()));
+    assert!(nicknames.contains(&"Bob".to_string()));
+    assert!(nicknames.contains(&"Charlie".to_string()));
+    
+    println!("User list test successful!");
+    
+    // Cleanup
+    drop(client1);
+    drop(client2);
+    drop(client3);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    server_handle.abort();
+    std::fs::remove_file(&db_path).ok();
+}
+
 
 #[tokio::test]
 async fn test_handshake_success() {

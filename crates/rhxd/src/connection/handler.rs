@@ -332,8 +332,8 @@ async fn handle_transaction(
         }
         
         TransactionType::GetUserNameList => {
-            tracing::info!("User {} requested user list (not yet implemented)", user_id);
-            Ok(None)
+            let result = handlers::user_list::handle_get_user_name_list(transaction, user_id, state).await?;
+            Ok(result)
         }
         
         _ => {
