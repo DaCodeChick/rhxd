@@ -195,18 +195,24 @@ pub async fn handle_connection(
                     Ok(broadcast) => {
                         // Convert broadcast to transaction if needed
                         let transaction = match broadcast {
-                            BroadcastMessage::ChatMessage { sender_id, message } => {
+                            BroadcastMessage::ChatMessage { sender_id, message, chat_options } => {
                                 // Get sender nickname
                                 let sender_nickname = state.get_session(sender_id)
                                     .map(|s| s.nickname.clone())
                                     .unwrap_or_else(|| format!("User {}", sender_id));
                                 
-                                // Format the chat message properly: "username: message\r"
-                                // The \r is important for Hotline clients to display correctly
-                                let formatted_message = format!("{}: ", sender_nickname);
-                                let mut formatted_data = formatted_message.into_bytes();
-                                formatted_data.extend_from_slice(&message);
-                                formatted_data.push(b'\r'); // Add carriage return at the end
+                                // Format the chat message based on mhxd format:
+                                // Normal (chat_options=0): "\r%13.13s:  %s" (13-char right-aligned username, 2 spaces after colon)
+                                // Emote (chat_options=1): "\r *** %s %s" (action format)
+                                let message_text = String::from_utf8_lossy(&message);
+                                let formatted_message = if chat_options == 1 {
+                                    // Emote format: "\r *** username message"
+                                    format!("\r *** {} {}", sender_nickname, message_text)
+                                } else {
+                                    // Normal format: "\r%13.13s:  %s" (right-aligned, 13 char max username)
+                                    format!("\r{:>13.13}:  {}", sender_nickname, message_text)
+                                };
+                                let formatted_data = formatted_message.into_bytes();
                                 
                                 Some(Transaction {
                                     flags: 0,

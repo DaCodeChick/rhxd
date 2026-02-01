@@ -71,6 +71,7 @@ pub async fn handle_send_chat(
     state.broadcast(BroadcastMessage::ChatMessage {
         sender_id: sender_info.0,
         message: message_data,
+        chat_options: chat_options.unwrap_or(0),
     });
     
     // No direct reply to sender (broadcast is the response)
