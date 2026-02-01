@@ -1,11 +1,12 @@
 //! Connection handler for individual clients
 
 use crate::connection::Session;
+use crate::handlers;
 use crate::state::{BroadcastMessage, ServerState};
 use anyhow::{Context, Result};
 use bytes::BytesMut;
 use rhxcore::codec::TransactionCodec;
-use rhxcore::protocol::{Handshake, HandshakeReply};
+use rhxcore::protocol::{Handshake, HandshakeReply, Transaction, TransactionType};
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
@@ -45,18 +46,66 @@ pub async fn handle_connection(
     }
     
     // Create framed codec for transaction handling
-    let _framed = Framed::new(stream, TransactionCodec::new());
+    let mut framed = Framed::new(stream, TransactionCodec::new());
     
-    // TODO: Main transaction loop (Task #4)
-    // - Read transactions from framed stream
-    // - Dispatch to appropriate handlers based on transaction type
-    // - Handle errors and disconnections
-    // - Update session activity timestamps
+    // Main transaction loop
+    use futures::StreamExt;
+    use futures::SinkExt;
     
-    tracing::info!("TODO: Transaction handling not yet implemented");
-    
-    // Simulate connection staying open briefly for testing
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+    loop {
+        tokio::select! {
+            // Read transaction from client
+            result = framed.next() => {
+                match result {
+                    Some(Ok(transaction)) => {
+                        // Update session activity
+                        if let Some(mut session) = state.get_session_mut(user_id) {
+                            session.touch();
+                        }
+                        
+                        tracing::debug!(
+                            "User {} transaction: type={:?}, id={}, fields={}",
+                            user_id,
+                            transaction.transaction_type,
+                            transaction.id,
+                            transaction.fields.len()
+                        );
+                        
+                        // Dispatch to appropriate handler
+                        let reply = handle_transaction(transaction, user_id, state.clone()).await;
+                        
+                        match reply {
+                            Ok(Some(reply_transaction)) => {
+                                // Send reply
+                                if let Err(e) = framed.send(reply_transaction).await {
+                                    tracing::error!("Failed to send reply to user {}: {}", user_id, e);
+                                    break;
+                                }
+                            }
+                            Ok(None) => {
+                                // No reply needed (transaction handled)
+                            }
+                            Err(e) => {
+                                tracing::error!("Error handling transaction for user {}: {}", user_id, e);
+                                // Continue processing (don't disconnect on handler errors)
+                            }
+                        }
+                    }
+                    Some(Err(e)) => {
+                        tracing::warn!("Error reading transaction from user {}: {}", user_id, e);
+                        break;
+                    }
+                    None => {
+                        tracing::debug!("User {} connection closed", user_id);
+                        break;
+                    }
+                }
+            }
+            
+            // TODO: Handle broadcast messages
+            // TODO: Handle timeouts/keepalive
+        }
+    }
     
     // Cleanup on disconnect
     if let Some(session) = state.unregister_session(user_id) {
@@ -149,4 +198,43 @@ async fn perform_handshake(stream: &mut TcpStream, user_id: u16) -> Result<()> {
     tracing::debug!("User {} handshake successful", user_id);
     
     Ok(())
+}
+
+/// Dispatch transaction to appropriate handler
+async fn handle_transaction(
+    transaction: Transaction,
+    user_id: u16,
+    state: Arc<ServerState>,
+) -> Result<Option<Transaction>> {
+    match transaction.transaction_type {
+        TransactionType::Login => {
+            let reply = handlers::login::handle_login(transaction, user_id, state).await?;
+            Ok(Some(reply))
+        }
+        
+        // TODO: Implement other handlers
+        TransactionType::Agreed => {
+            tracing::info!("User {} sent Agreed transaction (not yet implemented)", user_id);
+            Ok(None)
+        }
+        
+        TransactionType::SendChat => {
+            tracing::info!("User {} sent chat message (not yet implemented)", user_id);
+            Ok(None)
+        }
+        
+        TransactionType::GetUserNameList => {
+            tracing::info!("User {} requested user list (not yet implemented)", user_id);
+            Ok(None)
+        }
+        
+        _ => {
+            tracing::warn!(
+                "User {} sent unhandled transaction type: {:?}",
+                user_id,
+                transaction.transaction_type
+            );
+            Ok(None)
+        }
+    }
 }

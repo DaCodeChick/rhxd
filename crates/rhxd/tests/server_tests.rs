@@ -1,7 +1,11 @@
 //! Integration tests for the TCP server
 
 use bytes::{BufMut, BytesMut};
-use rhxcore::protocol::{Handshake, HandshakeReply, PROTOCOL_MAGIC};
+use rhxcore::password::scramble_password;
+use rhxcore::protocol::{
+    ErrorCode, Field, FieldId, Handshake, HandshakeReply, Transaction, TransactionType,
+    PROTOCOL_MAGIC, SERVER_VERSION,
+};
 use rhxd::{Config, Server};
 use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
