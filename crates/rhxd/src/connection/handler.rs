@@ -134,14 +134,65 @@ pub async fn handle_connection(
                                     ],
                                 })
                             }
+                            BroadcastMessage::UserJoined { user_id: joined_user_id, nickname } => {
+                                // Get user info from session
+                                let (icon_id, flags) = state.get_session(joined_user_id)
+                                    .map(|s| (s.icon_id, s.flags))
+                                    .unwrap_or((0, 0));
+                                
+                                // Build UserNameWithInfo field (Field 300)
+                                // Format: user_id (2 bytes) + icon_id (2 bytes) + flags (2 bytes) + name_len (2 bytes) + name
+                                let mut user_info = Vec::new();
+                                user_info.extend_from_slice(&joined_user_id.to_be_bytes());
+                                user_info.extend_from_slice(&icon_id.to_be_bytes());
+                                user_info.extend_from_slice(&flags.to_be_bytes());
+                                user_info.extend_from_slice(&(nickname.len() as u16).to_be_bytes());
+                                user_info.extend_from_slice(nickname.as_bytes());
+                                
+                                Some(Transaction {
+                                    flags: 0,
+                                    is_reply: false,
+                                    transaction_type: TransactionType::NotifyChangeUser,
+                                    id: 0, // Server-initiated transaction
+                                    error_code: 0,
+                                    total_size: 0,
+                                    data_size: 0,
+                                    fields: vec![
+                                        rhxcore::protocol::Field::binary(rhxcore::protocol::FieldId::UserNameWithInfo, user_info),
+                                    ],
+                                })
+                            }
+                            BroadcastMessage::UserLeft { user_id: left_user_id } => {
+                                Some(Transaction {
+                                    flags: 0,
+                                    is_reply: false,
+                                    transaction_type: TransactionType::NotifyDeleteUser,
+                                    id: 0, // Server-initiated transaction
+                                    error_code: 0,
+                                    total_size: 0,
+                                    data_size: 0,
+                                    fields: vec![
+                                        rhxcore::protocol::Field::integer(rhxcore::protocol::FieldId::UserId, left_user_id as i32),
+                                    ],
+                                })
+                            }
                             BroadcastMessage::ServerShutdown => {
                                 tracing::info!("User {} notified of server shutdown", user_id);
                                 break;
                             }
-                            _ => {
-                                // Other broadcast types not yet implemented
-                                tracing::debug!("Received unhandled broadcast: {:?}", broadcast);
-                                None
+                            BroadcastMessage::ServerMessage { message } => {
+                                Some(Transaction {
+                                    flags: 0,
+                                    is_reply: false,
+                                    transaction_type: TransactionType::ServerMessage,
+                                    id: 0, // Server-initiated transaction
+                                    error_code: 0,
+                                    total_size: 0,
+                                    data_size: 0,
+                                    fields: vec![
+                                        rhxcore::protocol::Field::string(rhxcore::protocol::FieldId::Data, message),
+                                    ],
+                                })
                             }
                         };
                         
@@ -270,10 +321,9 @@ async fn handle_transaction(
             Ok(Some(reply))
         }
         
-        // TODO: Implement other handlers
         TransactionType::Agreed => {
-            tracing::info!("User {} sent Agreed transaction (not yet implemented)", user_id);
-            Ok(None)
+            let result = handlers::agreed::handle_agreed(transaction, user_id, state).await?;
+            Ok(result)
         }
         
         TransactionType::SendChat => {

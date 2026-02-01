@@ -362,6 +362,136 @@ async fn test_chat_broadcast() {
     std::fs::remove_file(&db_path).ok();
 }
 
+#[tokio::test]
+async fn test_agreed_notification() {
+    let _ = tracing_subscriber::fmt()
+        .with_test_writer()
+        .try_init();
+
+    let mut config = Config::default();
+    let test_port = 15507;
+    config.server.port = test_port;
+    config.security.allow_guest = true;
+    config.database.path = format!("/tmp/test_rhxd_agreed_{}.db", std::process::id()).into();
+    let db_path = config.database.path.clone();
+    
+    let server = Server::new(config).await.expect("Failed to create server");
+    
+    let server_handle = tokio::spawn(async move {
+        server.run().await
+    });
+    
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    
+    // Connect two clients
+    let addr = format!("127.0.0.1:{}", test_port);
+    
+    let mut client1 = connect_and_handshake(&addr).await.expect("Client 1 handshake failed");
+    let mut client2 = connect_and_handshake(&addr).await.expect("Client 2 handshake failed");
+    
+    // Login both clients as guests
+    login_as_guest(&mut client1).await.expect("Client 1 login failed");
+    login_as_guest(&mut client2).await.expect("Client 2 login failed");
+    
+    println!("Both clients logged in");
+    
+    // Client 1 sends Agreed transaction with custom nickname
+    let agreed_tx = Transaction {
+        flags: 0,
+        is_reply: false,
+        transaction_type: TransactionType::Agreed,
+        id: 3,
+        error_code: 0,
+        total_size: 0,
+        data_size: 0,
+        fields: vec![
+            Field::string(FieldId::UserName, "TestUser1"),
+            Field::integer(FieldId::UserIconId, 42),
+            Field::integer(FieldId::Options, 0),
+        ],
+    };
+    
+    client1.send(agreed_tx).await.expect("Failed to send agreed");
+    
+    println!("Client 1 sent Agreed transaction");
+    
+    // Client 1 should receive acknowledgment reply
+    let reply = timeout(Duration::from_secs(2), client1.next())
+        .await
+        .expect("Timeout waiting for agreed reply")
+        .expect("No reply received")
+        .expect("Error receiving reply");
+    
+    assert_eq!(reply.transaction_type, TransactionType::Agreed);
+    assert!(reply.is_reply);
+    assert_eq!(reply.error_code, 0);
+    
+    println!("Client 1 received Agreed acknowledgment");
+    
+    // Both clients should receive NotifyChangeUser broadcast
+    // Client 1 receives notification about itself
+    let notify1 = timeout(Duration::from_secs(2), client1.next())
+        .await
+        .expect("Timeout waiting for notify to client 1")
+        .expect("No notification received")
+        .expect("Error receiving notification");
+    
+    assert_eq!(notify1.transaction_type, TransactionType::NotifyChangeUser);
+    
+    // Parse UserNameWithInfo field
+    let user_info = notify1.fields.iter()
+        .find(|f| f.id == FieldId::UserNameWithInfo)
+        .and_then(|f| f.as_binary())
+        .expect("No UserNameWithInfo field");
+    
+    // Parse the binary format: user_id (2) + icon_id (2) + flags (2) + name_len (2) + name
+    assert!(user_info.len() >= 8, "UserNameWithInfo too short");
+    
+    let notified_user_id = u16::from_be_bytes([user_info[0], user_info[1]]);
+    let icon_id = u16::from_be_bytes([user_info[2], user_info[3]]);
+    let name_len = u16::from_be_bytes([user_info[6], user_info[7]]);
+    let nickname = String::from_utf8_lossy(&user_info[8..8 + name_len as usize]);
+    
+    assert_eq!(notified_user_id, 1);
+    assert_eq!(icon_id, 42);
+    assert_eq!(nickname, "TestUser1");
+    
+    println!("Client 1 received NotifyChangeUser for itself");
+    
+    // Client 2 receives notification about client 1
+    let notify2 = timeout(Duration::from_secs(2), client2.next())
+        .await
+        .expect("Timeout waiting for notify to client 2")
+        .expect("No notification received")
+        .expect("Error receiving notification");
+    
+    assert_eq!(notify2.transaction_type, TransactionType::NotifyChangeUser);
+    
+    let user_info = notify2.fields.iter()
+        .find(|f| f.id == FieldId::UserNameWithInfo)
+        .and_then(|f| f.as_binary())
+        .expect("No UserNameWithInfo field");
+    
+    let notified_user_id = u16::from_be_bytes([user_info[0], user_info[1]]);
+    let icon_id = u16::from_be_bytes([user_info[2], user_info[3]]);
+    let name_len = u16::from_be_bytes([user_info[6], user_info[7]]);
+    let nickname = String::from_utf8_lossy(&user_info[8..8 + name_len as usize]);
+    
+    assert_eq!(notified_user_id, 1);
+    assert_eq!(icon_id, 42);
+    assert_eq!(nickname, "TestUser1");
+    
+    println!("Client 2 received NotifyChangeUser for client 1");
+    println!("Agreed notification test successful!");
+    
+    // Cleanup
+    drop(client1);
+    drop(client2);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    server_handle.abort();
+    std::fs::remove_file(&db_path).ok();
+}
+
 
 #[tokio::test]
 async fn test_handshake_success() {

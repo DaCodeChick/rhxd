@@ -1,4 +1,5 @@
 //! Transaction handlers
 
-pub mod login;
+pub mod agreed;
 pub mod chat;
+pub mod login;
