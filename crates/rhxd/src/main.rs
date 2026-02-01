@@ -10,7 +10,6 @@ mod state;
 mod connection;
 mod handlers;
 mod db;
-mod broadcast;
 
 pub use config::Config;
 pub use server::Server;

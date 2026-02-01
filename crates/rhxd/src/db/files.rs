@@ -1,5 +1,7 @@
 //! File metadata operations
 
+#![allow(dead_code)] // Many functions are for future use
+
 use anyhow::{bail, Result};
 use chrono::Utc;
 use sqlx::SqlitePool;

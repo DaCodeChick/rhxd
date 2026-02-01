@@ -1,5 +1,7 @@
 //! Account management operations
 
+#![allow(dead_code)] // Many functions are for future use
+
 use anyhow::{bail, Result};
 use chrono::Utc;
 use rhxcore::types::access::AccessPrivileges;
