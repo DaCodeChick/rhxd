@@ -402,6 +402,27 @@ async fn handle_transaction(
             Ok(result)
         }
         
+        // Account management
+        TransactionType::NewUser => {
+            let reply = handlers::account::handle_new_user(transaction, user_id, state).await?;
+            Ok(Some(reply))
+        }
+        
+        TransactionType::GetUser => {
+            let reply = handlers::account::handle_get_user(transaction, user_id, state).await?;
+            Ok(Some(reply))
+        }
+        
+        TransactionType::SetUser => {
+            let reply = handlers::account::handle_set_user(transaction, user_id, state).await?;
+            Ok(Some(reply))
+        }
+        
+        TransactionType::DeleteUser => {
+            let reply = handlers::account::handle_delete_user(transaction, user_id, state).await?;
+            Ok(Some(reply))
+        }
+        
         _ => {
             tracing::warn!(
                 "User {} sent unhandled transaction type: {:?}",
