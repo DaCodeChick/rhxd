@@ -23,6 +23,16 @@ impl Server {
         })
     }
     
+    /// Get a reference to the server state (for console access)
+    pub fn state(&self) -> Arc<ServerState> {
+        self.state.clone()
+    }
+    
+    /// Get a reference to the shutdown notifier (for console-triggered shutdown)
+    pub fn shutdown_handle(&self) -> Arc<Notify> {
+        self.shutdown.clone()
+    }
+    
     /// Run the server main loop
     pub async fn run(self) -> Result<()> {
         let addr = format!(

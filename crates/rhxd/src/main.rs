@@ -5,6 +5,7 @@ use clap::{Parser, Subcommand};
 
 mod cli;
 mod config;
+mod console;
 mod server;
 mod state;
 mod connection;
