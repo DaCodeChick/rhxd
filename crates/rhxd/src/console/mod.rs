@@ -12,6 +12,9 @@ use crate::ServerState;
 
 /// Run the interactive console loop
 pub async fn run_console(state: Arc<ServerState>) -> Result<()> {
+    // Give the server a moment to complete initialization and print its startup messages
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+    
     let stdin = io::stdin();
     let mut reader = BufReader::new(stdin);
     let mut line = String::new();
