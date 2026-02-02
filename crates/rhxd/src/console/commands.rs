@@ -11,33 +11,33 @@ use rhxcore::types::AccessPrivileges;
 /// Console commands
 #[derive(Debug, Clone)]
 pub enum Command {
-    /// Create a new account with specified privileges
-    CreateAccount { 
+    /// Account management: create
+    AccountCreate { 
         login: String, 
         password: String,
         access_level: String,
     },
     
-    /// Set access privileges for an existing account
-    SetAccess {
+    /// Account management: set access
+    AccountAccessSet {
         login: String,
         access_level: String,
     },
     
-    /// Delete an account by login
-    DeleteAccount { login: String },
+    /// Account management: delete
+    AccountDelete { login: String },
     
-    /// List all accounts
-    ListAccounts,
+    /// Account management: list
+    AccountList,
     
-    /// Disconnect a user by ID or nickname
-    Kick { target: String },
+    /// User management: kick
+    UserKick { target: String },
+    
+    /// User management: list
+    UserList,
     
     /// Broadcast a message to all connected users
     Broadcast { message: String },
-    
-    /// List currently connected users
-    ListUsers,
     
     /// Show help
     Help,
@@ -56,52 +56,83 @@ impl Command {
         }
         
         match parts[0] {
-            "create-account" => {
-                if parts.len() < 3 {
-                    bail!("Usage: create-account <login> <password> [admin|sysop|user|guest]");
-                }
-                let access_level = if parts.len() >= 4 {
-                    parts[3].to_string()
-                } else {
-                    "admin".to_string() // Default to admin for backwards compatibility
-                };
-                Ok(Command::CreateAccount {
-                    login: parts[1].to_string(),
-                    password: parts[2].to_string(),
-                    access_level,
-                })
-            }
-            
-            "set-access" => {
-                if parts.len() < 3 {
-                    bail!("Usage: set-access <login> <admin|sysop|user|guest>");
-                }
-                Ok(Command::SetAccess {
-                    login: parts[1].to_string(),
-                    access_level: parts[2].to_string(),
-                })
-            }
-            
-            "delete-account" => {
+            "account" => {
                 if parts.len() < 2 {
-                    bail!("Usage: delete-account <login>");
+                    bail!("Usage: account <create|access|delete|list>");
                 }
-                Ok(Command::DeleteAccount {
-                    login: parts[1].to_string(),
-                })
+                
+                match parts[1] {
+                    "create" => {
+                        if parts.len() < 4 {
+                            bail!("Usage: account create <login> <password> [admin|sysop|user|guest]");
+                        }
+                        let access_level = if parts.len() >= 5 {
+                            parts[4].to_string()
+                        } else {
+                            "admin".to_string() // Default to admin
+                        };
+                        Ok(Command::AccountCreate {
+                            login: parts[2].to_string(),
+                            password: parts[3].to_string(),
+                            access_level,
+                        })
+                    }
+                    
+                    "access" => {
+                        if parts.len() < 3 || parts[2] != "set" {
+                            bail!("Usage: account access set <login> <admin|sysop|user|guest>");
+                        }
+                        if parts.len() < 5 {
+                            bail!("Usage: account access set <login> <admin|sysop|user|guest>");
+                        }
+                        Ok(Command::AccountAccessSet {
+                            login: parts[3].to_string(),
+                            access_level: parts[4].to_string(),
+                        })
+                    }
+                    
+                    "delete" => {
+                        if parts.len() < 3 {
+                            bail!("Usage: account delete <login>");
+                        }
+                        Ok(Command::AccountDelete {
+                            login: parts[2].to_string(),
+                        })
+                    }
+                    
+                    "list" => {
+                        Ok(Command::AccountList)
+                    }
+                    
+                    _ => {
+                        bail!("Unknown account subcommand: '{}'. Valid: create, access, delete, list", parts[1]);
+                    }
+                }
             }
             
-            "list-accounts" => {
-                Ok(Command::ListAccounts)
-            }
-            
-            "kick" => {
+            "user" => {
                 if parts.len() < 2 {
-                    bail!("Usage: kick <user_id|nickname>");
+                    bail!("Usage: user <kick|list>");
                 }
-                Ok(Command::Kick {
-                    target: parts[1].to_string(),
-                })
+                
+                match parts[1] {
+                    "kick" => {
+                        if parts.len() < 3 {
+                            bail!("Usage: user kick <user_id|nickname>");
+                        }
+                        Ok(Command::UserKick {
+                            target: parts[2].to_string(),
+                        })
+                    }
+                    
+                    "list" => {
+                        Ok(Command::UserList)
+                    }
+                    
+                    _ => {
+                        bail!("Unknown user subcommand: '{}'. Valid: kick, list", parts[1]);
+                    }
+                }
             }
             
             "broadcast" => {
@@ -113,10 +144,6 @@ impl Command {
                 Ok(Command::Broadcast { message })
             }
             
-            "list-users" => {
-                Ok(Command::ListUsers)
-            }
-            
             "help" => {
                 Ok(Command::Help)
             }
@@ -126,7 +153,7 @@ impl Command {
             }
             
             _ => {
-                bail!("Unknown command: '{}'", parts[0]);
+                bail!("Unknown command: '{}'. Type 'help' for available commands.", parts[0]);
             }
         }
     }
@@ -135,32 +162,32 @@ impl Command {
 /// Execute a console command
 pub async fn execute_command(cmd: Command, state: Arc<ServerState>) -> Result<()> {
     match cmd {
-        Command::CreateAccount { login, password, access_level } => {
+        Command::AccountCreate { login, password, access_level } => {
             cmd_create_account(&state, &login, &password, &access_level).await
         }
         
-        Command::SetAccess { login, access_level } => {
+        Command::AccountAccessSet { login, access_level } => {
             cmd_set_access(&state, &login, &access_level).await
         }
         
-        Command::DeleteAccount { login } => {
+        Command::AccountDelete { login } => {
             cmd_delete_account(&state, &login).await
         }
         
-        Command::ListAccounts => {
+        Command::AccountList => {
             cmd_list_accounts(&state).await
         }
         
-        Command::Kick { target } => {
+        Command::UserKick { target } => {
             cmd_kick(&state, &target).await
+        }
+        
+        Command::UserList => {
+            cmd_list_users(&state).await
         }
         
         Command::Broadcast { message } => {
             cmd_broadcast(&state, &message).await
-        }
-        
-        Command::ListUsers => {
-            cmd_list_users(&state).await
         }
         
         Command::Help => {
@@ -346,28 +373,31 @@ async fn cmd_list_users(state: &ServerState) -> Result<()> {
 /// Show help
 fn cmd_help() {
     println!("\nAvailable commands:");
-    println!("  create-account <login> <password> [access]");
+    println!();
+    println!("Account Management:");
+    println!("  account create <login> <password> [access]");
     println!("      Create account with access level (default: admin)");
     println!("      Access levels: admin, sysop, user, guest");
     println!();
-    println!("  set-access <login> <access>");
+    println!("  account access set <login> <access>");
     println!("      Change account access level");
-    println!("      Access levels: admin, sysop, user, guest");
     println!();
-    println!("  delete-account <login>");
+    println!("  account delete <login>");
     println!("      Delete an account");
     println!();
-    println!("  list-accounts");
-    println!("      Show all accounts with their access levels");
+    println!("  account list");
+    println!("      Show all accounts");
     println!();
-    println!("  kick <user_id|nickname>");
+    println!("User Management:");
+    println!("  user kick <user_id|nickname>");
     println!("      Disconnect a user");
     println!();
+    println!("  user list");
+    println!("      Show connected users");
+    println!();
+    println!("Server:");
     println!("  broadcast <message>");
     println!("      Send message to all users");
-    println!();
-    println!("  list-users");
-    println!("      Show connected users");
     println!();
     println!("  help");
     println!("      Show this help");
