@@ -423,6 +423,11 @@ async fn handle_transaction(
             Ok(Some(reply))
         }
         
+        TransactionType::GetClientInfoText => {
+            let reply = handlers::user_info::handle_get_client_info_text(transaction, user_id, state).await?;
+            Ok(reply)
+        }
+        
         _ => {
             tracing::warn!(
                 "User {} sent unhandled transaction type: {:?}",
