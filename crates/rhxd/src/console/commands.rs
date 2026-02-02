@@ -377,7 +377,7 @@ fn cmd_help() {
     println!("Account Management:");
     println!("  account create <login> <password> [access]");
     println!("      Create account with access level (default: admin)");
-    println!("      Access levels: admin, sysop, user, guest");
+    println!("      Access levels: sysop, admin, user, guest");
     println!();
     println!("  account access set <login> <access>");
     println!("      Change account access level");
@@ -406,8 +406,8 @@ fn cmd_help() {
     println!("      Shut down the server");
     println!();
     println!("Access level details:");
-    println!("  admin  - Full privileges (can't be disconnected)");
-    println!("  sysop  - Full privileges (can be disconnected by admin)");
+    println!("  sysop  - Highest level, full privileges (can't be disconnected)");
+    println!("  admin  - Full privileges (can be disconnected by sysop)");
     println!("  user   - Chat, files, messages, private chat");
     println!("  guest  - Read chat, send chat, read news, download files");
     println!();

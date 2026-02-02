@@ -78,14 +78,15 @@ bitflags::bitflags! {
 }
 
 impl AccessPrivileges {
-    /// Full admin access (all privileges)
-    pub fn admin() -> Self {
+    /// System operator access (highest level - all privileges including can't be disconnected)
+    /// Sysops have complete control and cannot be disconnected by anyone
+    pub fn sysop() -> Self {
         Self::all()
     }
 
-    /// System operator access (all privileges except can't be disconnected)
-    /// Sysops can manage users, files, news, and moderate chat, but super admins can still disconnect them
-    pub fn sysop() -> Self {
+    /// Admin access (all privileges except can't be disconnected)
+    /// Admins can manage users, files, news, and moderate chat, but sysops can disconnect them
+    pub fn admin() -> Self {
         Self::all() & !Self::CANT_BE_DISCONNECTED
     }
 
@@ -109,8 +110,8 @@ impl AccessPrivileges {
     /// Parse a preset name into AccessPrivileges
     pub fn from_preset(name: &str) -> Option<Self> {
         match name.to_lowercase().as_str() {
-            "admin" => Some(Self::admin()),
             "sysop" => Some(Self::sysop()),
+            "admin" => Some(Self::admin()),
             "user" => Some(Self::user()),
             "guest" => Some(Self::guest()),
             _ => None,
@@ -119,10 +120,10 @@ impl AccessPrivileges {
 
     /// Get the preset name for these privileges (if it matches exactly)
     pub fn preset_name(&self) -> Option<&'static str> {
-        if *self == Self::admin() {
-            Some("admin")
-        } else if *self == Self::sysop() {
+        if *self == Self::sysop() {
             Some("sysop")
+        } else if *self == Self::admin() {
+            Some("admin")
         } else if *self == Self::user() {
             Some("user")
         } else if *self == Self::guest() {
