@@ -248,20 +248,17 @@ async fn cmd_list_accounts(state: &ServerState) -> Result<()> {
         return Ok(());
     }
     
-    println!("\n{:<5} {:<20} {:<20} {:<12} {:<18}", "ID", "Login", "Name", "Access", "Privileges");
-    println!("{}", "-".repeat(80));
+    println!("\n{:<5} {:<20} {:<20} {:<18}", "ID", "Login", "Name", "Privileges");
+    println!("{}", "-".repeat(68));
     
     for account in accounts {
         let access_privs = account.access_privileges();
-        let preset_name = access_privs.preset_name()
-            .unwrap_or("custom");
         
         println!(
-            "{:<5} {:<20} {:<20} {:<12} 0x{:016X}",
+            "{:<5} {:<20} {:<20} 0x{:016X}",
             account.id,
             account.login,
             account.name,
-            preset_name,
             access_privs.bits()
         );
     }
