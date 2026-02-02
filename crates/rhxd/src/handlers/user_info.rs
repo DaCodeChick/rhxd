@@ -144,10 +144,17 @@ async fn build_user_info_text(
     // Extract IP address
     let ip = session.address.ip().to_string();
 
-    // Build the formatted text following GLoarbLine's format
+    // Build the formatted text following GLoarbLine's exact format
     // Note: GLoarbLine uses \r (carriage return) as line separator, which is Mac Classic convention
+    // Format matches GLoarbLine's normal mode (non-bot) output
     let info_text = format!(
-        "Nickname:   {}\rUserId:     {}\rIcon:       {}\rAway:       {} min {} sec\rName:       {}\rAccount:    {}\rAddress:    {}\rConnected:  {}",
+        "Nickname:   {}\r\
+         UserId:     {}\r\
+         Icon:       {}\r\
+         Away:       {} min {} sec\r\
+         Name:       {}\r\
+         Account:    {}\r\
+         Address:    {}",
         session.nickname,
         session.user_id,
         session.icon_id,
@@ -155,8 +162,7 @@ async fn build_user_info_text(
         away_seconds,
         account_name,
         account_login,
-        ip,
-        connected_str
+        ip
     );
 
     Ok(info_text)
