@@ -3,7 +3,7 @@
 use anyhow::{anyhow, bail, Result};
 use std::sync::Arc;
 
-use crate::db::accounts::{create_account, delete_account, get_account_by_login, list_accounts};
+use crate::db::accounts::{create_account, delete_account, get_account_by_login, list_accounts, update_access};
 use crate::state::{BroadcastMessage, ServerState};
 use rhxcore::password::xor_password;
 use rhxcore::types::AccessPrivileges;
@@ -11,8 +11,18 @@ use rhxcore::types::AccessPrivileges;
 /// Console commands
 #[derive(Debug, Clone)]
 pub enum Command {
-    /// Create a new account with admin privileges
-    CreateAccount { login: String, password: String },
+    /// Create a new account with specified privileges
+    CreateAccount { 
+        login: String, 
+        password: String,
+        access_level: String,
+    },
+    
+    /// Set access privileges for an existing account
+    SetAccess {
+        login: String,
+        access_level: String,
+    },
     
     /// Delete an account by login
     DeleteAccount { login: String },
@@ -48,11 +58,27 @@ impl Command {
         match parts[0] {
             "create-account" => {
                 if parts.len() < 3 {
-                    bail!("Usage: create-account <login> <password>");
+                    bail!("Usage: create-account <login> <password> [admin|sysop|user|guest]");
                 }
+                let access_level = if parts.len() >= 4 {
+                    parts[3].to_string()
+                } else {
+                    "admin".to_string() // Default to admin for backwards compatibility
+                };
                 Ok(Command::CreateAccount {
                     login: parts[1].to_string(),
                     password: parts[2].to_string(),
+                    access_level,
+                })
+            }
+            
+            "set-access" => {
+                if parts.len() < 3 {
+                    bail!("Usage: set-access <login> <admin|sysop|user|guest>");
+                }
+                Ok(Command::SetAccess {
+                    login: parts[1].to_string(),
+                    access_level: parts[2].to_string(),
                 })
             }
             
@@ -109,8 +135,12 @@ impl Command {
 /// Execute a console command
 pub async fn execute_command(cmd: Command, state: Arc<ServerState>) -> Result<()> {
     match cmd {
-        Command::CreateAccount { login, password } => {
-            cmd_create_account(&state, &login, &password).await
+        Command::CreateAccount { login, password, access_level } => {
+            cmd_create_account(&state, &login, &password, &access_level).await
+        }
+        
+        Command::SetAccess { login, access_level } => {
+            cmd_set_access(&state, &login, &access_level).await
         }
         
         Command::DeleteAccount { login } => {
@@ -145,27 +175,51 @@ pub async fn execute_command(cmd: Command, state: Arc<ServerState>) -> Result<()
     }
 }
 
-/// Create a new account with admin privileges
-async fn cmd_create_account(state: &ServerState, login: &str, password: &str) -> Result<()> {
+/// Create a new account with specified privileges
+async fn cmd_create_account(state: &ServerState, login: &str, password: &str, access_level: &str) -> Result<()> {
     // Check if account already exists
     if get_account_by_login(state.database.pool(), login).await?.is_some() {
         bail!("Account '{}' already exists", login);
     }
     
+    // Parse access level
+    let access = AccessPrivileges::from_preset(access_level)
+        .ok_or_else(|| anyhow!("Invalid access level '{}'. Valid options: admin, sysop, user, guest", access_level))?;
+    
     // Hash password
     let password_hash = xor_password(password.as_bytes());
     
-    // Create account with full admin privileges
+    // Create account
     let account_id = create_account(
         state.database.pool(),
         login,
         &password_hash,
         login, // Use login as name
-        AccessPrivileges::admin(),
+        access,
     ).await?;
     
-    println!("Created admin account: {} (ID: {})", login, account_id);
-    println!("Privileges: 0x{:016X}", AccessPrivileges::admin().bits());
+    println!("Created account: {} (ID: {})", login, account_id);
+    println!("Access level: {} (0x{:016X})", access_level, access.bits());
+    
+    Ok(())
+}
+
+/// Set access privileges for an existing account
+async fn cmd_set_access(state: &ServerState, login: &str, access_level: &str) -> Result<()> {
+    // Check if account exists
+    let account = get_account_by_login(state.database.pool(), login)
+        .await?
+        .ok_or_else(|| anyhow!("Account '{}' not found", login))?;
+    
+    // Parse access level
+    let access = AccessPrivileges::from_preset(access_level)
+        .ok_or_else(|| anyhow!("Invalid access level '{}'. Valid options: admin, sysop, user, guest", access_level))?;
+    
+    // Update access
+    update_access(state.database.pool(), account.id, access).await?;
+    
+    println!("Updated access for account: {} (ID: {})", login, account.id);
+    println!("New access level: {} (0x{:016X})", access_level, access.bits());
     
     Ok(())
 }
@@ -194,16 +248,21 @@ async fn cmd_list_accounts(state: &ServerState) -> Result<()> {
         return Ok(());
     }
     
-    println!("\n{:<5} {:<20} {:<20} {:<18}", "ID", "Login", "Name", "Privileges");
-    println!("{}", "-".repeat(68));
+    println!("\n{:<5} {:<20} {:<20} {:<12} {:<18}", "ID", "Login", "Name", "Access", "Privileges");
+    println!("{}", "-".repeat(80));
     
     for account in accounts {
+        let access_privs = account.access_privileges();
+        let preset_name = access_privs.preset_name()
+            .unwrap_or("custom");
+        
         println!(
-            "{:<5} {:<20} {:<20} 0x{:016X}",
+            "{:<5} {:<20} {:<20} {:<12} 0x{:016X}",
             account.id,
             account.login,
             account.name,
-            account.access_privileges().bits()
+            preset_name,
+            access_privs.bits()
         );
     }
     println!();
@@ -290,13 +349,39 @@ async fn cmd_list_users(state: &ServerState) -> Result<()> {
 /// Show help
 fn cmd_help() {
     println!("\nAvailable commands:");
-    println!("  create-account <login> <password>  Create admin account");
-    println!("  delete-account <login>             Delete an account");
-    println!("  list-accounts                      Show all accounts");
-    println!("  kick <user_id|nickname>            Disconnect a user");
-    println!("  broadcast <message>                Send message to all users");
-    println!("  list-users                         Show connected users");
-    println!("  help                               Show this help");
-    println!("  stop                               Shut down the server");
+    println!("  create-account <login> <password> [access]");
+    println!("      Create account with access level (default: admin)");
+    println!("      Access levels: admin, sysop, user, guest");
+    println!();
+    println!("  set-access <login> <access>");
+    println!("      Change account access level");
+    println!("      Access levels: admin, sysop, user, guest");
+    println!();
+    println!("  delete-account <login>");
+    println!("      Delete an account");
+    println!();
+    println!("  list-accounts");
+    println!("      Show all accounts with their access levels");
+    println!();
+    println!("  kick <user_id|nickname>");
+    println!("      Disconnect a user");
+    println!();
+    println!("  broadcast <message>");
+    println!("      Send message to all users");
+    println!();
+    println!("  list-users");
+    println!("      Show connected users");
+    println!();
+    println!("  help");
+    println!("      Show this help");
+    println!();
+    println!("  stop");
+    println!("      Shut down the server");
+    println!();
+    println!("Access level details:");
+    println!("  admin  - Full privileges (can't be disconnected)");
+    println!("  sysop  - Full privileges (can be disconnected by admin)");
+    println!("  user   - Chat, files, messages, private chat");
+    println!("  guest  - Read chat, send chat, read news, download files");
     println!();
 }
