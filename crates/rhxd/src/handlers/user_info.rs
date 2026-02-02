@@ -123,10 +123,30 @@ async fn build_user_info_text(
         .duration_since(session.last_activity)
         .unwrap_or_default();
     let total_seconds = away_duration.as_secs();
-    let away_days = total_seconds / 86400;
-    let away_hours = (total_seconds % 86400) / 3600;
-    let away_minutes = (total_seconds % 3600) / 60;
-    let away_seconds = total_seconds % 60;
+    
+    // Build away time string dynamically based on duration
+    let away_string = if total_seconds < 60 {
+        // Less than 1 minute: show only seconds
+        format!("{} sec", total_seconds)
+    } else if total_seconds < 3600 {
+        // Less than 1 hour: show minutes and seconds
+        let minutes = total_seconds / 60;
+        let seconds = total_seconds % 60;
+        format!("{} min {} sec", minutes, seconds)
+    } else if total_seconds < 86400 {
+        // Less than 1 day: show hours, minutes, and seconds
+        let hours = total_seconds / 3600;
+        let minutes = (total_seconds % 3600) / 60;
+        let seconds = total_seconds % 60;
+        format!("{} hr {} min {} sec", hours, minutes, seconds)
+    } else {
+        // 1 day or more: show days, hours, minutes, and seconds
+        let days = total_seconds / 86400;
+        let hours = (total_seconds % 86400) / 3600;
+        let minutes = (total_seconds % 3600) / 60;
+        let seconds = total_seconds % 60;
+        format!("{} day {} hr {} min {} sec", days, hours, minutes, seconds)
+    };
 
     // Format connection time
     let connected_datetime: DateTime<Utc> = session.connected_at.into();
@@ -154,17 +174,14 @@ async fn build_user_info_text(
         "Nickname:   {}\r\
          User ID:    {}\r\
          Icon:       {}\r\
-         Away:       {} day {} hr {} min {} sec\r\
+         Away:       {}\r\
          Name:       {}\r\
          Account:    {}\r\
          Address:    {}",
         session.nickname,
         session.user_id,
         session.icon_id,
-        away_days,
-        away_hours,
-        away_minutes,
-        away_seconds,
+        away_string,
         account_name,
         account_login,
         ip
