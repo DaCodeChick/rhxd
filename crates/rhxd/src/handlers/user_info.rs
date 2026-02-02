@@ -149,7 +149,7 @@ async fn build_user_info_text(
     // Format matches GLoarbLine's normal mode (non-bot) output
     let info_text = format!(
         "Nickname:   {}\r\
-         UserId:     {}\r\
+         User ID:    {}\r\
          Icon:       {}\r\
          Away:       {} min {} sec\r\
          Name:       {}\r\
